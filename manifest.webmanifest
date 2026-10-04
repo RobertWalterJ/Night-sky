@@ -3,7 +3,7 @@
   "name": "Night Sky",
   "short_name": "Night Sky",
   "description": "Stargazing forecast, live sky with phone pointing, satellites, space news and radio.",
-  "start_url": "./#tonight",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
