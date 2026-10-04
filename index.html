@@ -290,6 +290,25 @@
   </form>
 </dialog>
 <div class="toast" id="toast" hidden></div>
+<script>
+/* Install helper: shows Chrome's own install prompt when Chrome offers it, and says plainly when it does not. */
+(function () {
+  if (matchMedia('(display-mode: standalone)').matches) return;
+  var box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;max-width:80vw;padding:10px 14px;border-radius:12px;background:#0b1a13;color:#fff;font:15px/1.4 system-ui,sans-serif;border:1px solid #3a6;box-shadow:0 2px 12px #000a';
+  var msg = document.createElement('div'); msg.textContent = 'Install check: waiting for Chrome...';
+  var btn = document.createElement('button'); btn.textContent = 'Install Night Sky'; btn.hidden = true;
+  btn.style.cssText = 'margin-top:8px;padding:10px 14px;font:inherit;border-radius:8px;border:0;background:#3a6;color:#000;font-weight:600';
+  var x = document.createElement('div'); x.textContent = 'Close'; x.style.cssText = 'margin-top:8px;opacity:.7;text-decoration:underline';
+  x.onclick = function () { box.remove(); };
+  box.append(msg, btn, x); document.addEventListener('DOMContentLoaded', function () { document.body.appendChild(box); });
+  var ev = null;
+  addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); ev = e; msg.textContent = 'Chrome says Night Sky can be installed.'; btn.hidden = false; });
+  btn.onclick = function () { if (!ev) return; ev.prompt(); ev.userChoice.then(function (c) { msg.textContent = 'Result: ' + c.outcome; btn.hidden = true; ev = null; }); };
+  addEventListener('appinstalled', function () { msg.textContent = 'Installed.'; btn.hidden = true; });
+  setTimeout(function () { if (!ev) msg.textContent = 'Chrome has not offered to install this page (it thinks it is already installed, or not installable).'; }, 6000);
+})();
+</script>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>
