@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en" data-theme="airy">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Night Sky</title>
+<meta name="description" content="Stargazing forecast, live sky map with phone pointing, satellites, space news and radio.">
+<meta name="theme-color" content="#f7faf7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Night Sky">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/app.css">
+<script src="vendor/astronomy.browser.min.js"></script>
+<script src="vendor/satellite.min.js"></script>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }</script>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <button class="brand" data-go="tonight" aria-label="Home">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><ellipse cx="12" cy="12" rx="10" ry="3.6" fill="none" stroke="currentColor" stroke-width="1.3" transform="rotate(-24 12 12)"/></svg>
+      <span>Night Sky</span>
+    </button>
+    <button class="chip" id="locChip" title="Change location"><span class="dot"></span><span id="locName">Locating…</span></button>
+    <button class="chip" id="timeChip" title="Time travel"><span id="timeLabel">Live</span></button>
+    <div class="spacer"></div>
+    <div class="themes" role="radiogroup" aria-label="Display mode">
+      <button data-theme-set="airy" title="Airy (day)" aria-label="Airy mode">◐</button>
+      <button data-theme-set="cosmos" title="Cosmos (true colour night)" aria-label="Cosmos mode">✦</button>
+      <button data-theme-set="stargazer" title="Stargazer (red, low light)" aria-label="Stargazer mode">●</button>
+      <button data-theme-set="terminal" title="Terminal (1980s)" aria-label="Terminal mode">▮</button>
+    </div>
+    <button class="iconbtn" id="settingsBtn" aria-label="Settings">⚙</button>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-go="tonight"><i>☾</i><span>Tonight</span></button>
+    <button data-go="overhead"><i>◉</i><span>Overhead</span></button>
+    <button data-go="sky"><i>✦</i><span>Sky</span></button>
+    <button data-go="earth"><i>◍</i><span>Earth</span></button>
+    <button data-go="events"><i>✶</i><span>Events</span></button>
+    <button data-go="feed"><i>◎</i><span>Feed</span></button>
+    <button data-go="radio"><i>≋</i><span>Radio</span></button>
+    <button data-go="lab" class="desk"><i>⌕</i><span>Lab</span></button>
+  </nav>
+
+  <main>
+    <!-- TONIGHT -->
+    <section class="view" id="view-tonight">
+      <div class="hero card">
+        <button class="hero-dome" id="heroDome" aria-label="Open the overhead sky">
+          <canvas id="heroCanvas"></canvas>
+          <svg class="dome-ring" viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="57"/><circle class="val" id="scoreArc" cx="60" cy="60" r="57"/></svg>
+          <span class="dome-tag">Your sky now</span>
+        </button>
+        <div class="hero-text">
+          <div class="score-line"><b id="scoreNum">–</b><small>/100</small></div>
+          <p class="eyebrow" id="heroEyebrow">Stargazing tonight</p>
+          <h1 id="heroVerdict">Reading the sky…</h1>
+          <p id="heroDetail" class="muted"></p>
+          <div class="pillrow" id="heroPills"></div>
+        </div>
+      </div>
+      <div class="countdowns" id="countdowns"></div>
+      <div class="card">
+        <div class="card-h"><h2>Night planner</h2><span class="muted small">Sunset to sunrise · shading = height in the sky</span></div>
+        <div class="planner" id="planner"></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Hour by hour</h2><span class="muted small" id="fcSource">Open-Meteo</span></div>
+        <div class="timeline" id="timeline"></div>
+        <div class="legend small muted"><span><i class="lg sc"></i>Score</span><span><i class="lg cl"></i>Cloud</span><span><i class="lg mn"></i>Moon up</span><span><i class="lg dk"></i>Dark</span></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><div class="card-h"><h2>Sun &amp; Moon</h2></div><div id="sunMoon" class="kv"></div></div>
+        <div class="card"><div class="card-h"><h2>Planets tonight</h2></div><div id="planetList" class="list"></div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><div class="card-h"><h2>Visible satellite passes</h2><span class="muted small">ISS · Tiangong · Hubble</span></div><div id="passList" class="list"><p class="muted">Loading orbits…</p></div></div>
+        <div class="card"><div class="card-h"><h2>Best deep-sky targets</h2></div><div id="dsoList" class="list"></div></div>
+      </div>
+      <div class="card"><div class="card-h"><h2>Your sky darkness &amp; where to find darker</h2></div><div id="darkCard"></div></div>
+      <div class="card"><div class="card-h"><h2>Aurora &amp; space weather</h2></div><div id="aurora" class="kv"><p class="muted">Loading…</p></div></div>
+    </section>
+
+    <!-- OVERHEAD -->
+    <section class="view" id="view-overhead">
+      <div class="oh-grid">
+        <div class="oh-dome card">
+          <div class="oh-dome-head"><p class="eyebrow" id="ohClock">Overhead now</p><button class="btn ghost sm" id="ohFollow">Lie back &amp; follow compass</button></div>
+          <div class="oh-canvas-wrap"><canvas id="ohCanvas"></canvas></div>
+          <p class="small muted oh-hint">Hold the phone above your face, screen down, top of the phone pointing where your head points. Drag to turn.</p>
+        </div>
+        <div class="oh-side">
+          <div class="stat-row" id="ohStats"></div>
+          <div class="card"><div class="card-h"><h2>Straight up</h2></div><div id="ohZenith" class="kv"></div></div>
+          <div class="card"><div class="card-h"><h2>Up right now</h2></div><div id="ohUp" class="list"></div></div>
+          <div class="card"><div class="card-h"><h2>Passing over this minute</h2><span class="muted small" id="ohSatCount"></span></div><div id="ohSats" class="list"></div></div>
+          <div class="card"><div class="card-h"><h2>Coming up</h2></div><div id="ohNext" class="list"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SKY -->
+    <section class="view" id="view-sky">
+      <div class="sky-wrap" id="skyWrap">
+        <video id="camVideo" playsinline muted autoplay></video>
+        <canvas id="skyCanvas"></canvas>
+        <canvas id="arCanvas"></canvas>
+        <div class="sky-hud top">
+          <div class="hud-dir" id="hudDir">N · 30°</div>
+          <div class="hud-time" id="hudTime"></div>
+        </div>
+        <div class="sky-search"><input id="skySearch" placeholder="Find Jupiter, Orion, M31, ISS…" autocomplete="off"><div id="searchResults" class="search-results"></div></div>
+        <div class="sky-tools">
+          <button id="btnSensor" class="tool" title="Point your phone at the sky"><b>⌖</b><span>Point</span></button>
+          <button id="btnCamera" class="tool" title="Camera overlay"><b>◉</b><span>Camera</span></button>
+          <button id="btnAlign" class="tool" title="Align compass on a known object"><b>⊕</b><span>Align</span></button>
+          <button id="btnLayers" class="tool" title="Layers"><b>≡</b><span>Layers</span></button>
+        </div>
+        <div class="layers card" id="layersPanel" hidden>
+          <label><input type="checkbox" data-layer="constLines" checked> Constellation lines</label>
+          <label><input type="checkbox" data-layer="constNames" checked> Constellation names</label>
+          <label><input type="checkbox" data-layer="starNames" checked> Star names</label>
+          <label><input type="checkbox" data-layer="dsos" checked> Nebulae, galaxies &amp; clusters</label>
+          <label><input type="checkbox" data-layer="sats" checked> Satellites (bright + stations)</label>
+          <label><input type="checkbox" data-layer="starlink"> Starlink (heavy)</label>
+          <label><input type="checkbox" data-layer="models3d" checked> 3D models (Moon, planets, ISS)</label>
+          <label><input type="checkbox" data-layer="milkyway" checked> Milky Way</label>
+          <label><input type="checkbox" data-layer="below" checked> See below the horizon</label>
+          <label><input type="checkbox" data-layer="isochrones" checked> Rise / set time lines</label>
+          <label><input type="checkbox" data-layer="grid"> Alt/az grid</label>
+          <label><input type="checkbox" data-layer="ground" checked> Ground</label>
+          <label><input type="checkbox" data-layer="realistic" checked> Realistic (only what your eyes can see)</label>
+          <div class="dark-ctl"><span class="small muted">Sky darkness</span><input type="range" min="1" max="9" step="1" class="bortle" aria-label="Sky darkness"><b class="small bortle-name"></b></div>
+        </div>
+        <div class="time-strip">
+          <button id="tMinus" class="tool sm">−1h</button>
+          <button id="tPlay" class="tool sm" title="Time-lapse the night">▶</button>
+          <input type="range" id="timeSlider" min="-1440" max="1440" value="0" step="5" aria-label="Time offset">
+          <button id="tPlus" class="tool sm">+1h</button>
+          <button id="tNow" class="tool sm">Now</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- EARTH -->
+    <section class="view" id="view-earth">
+      <div class="globe-wrap">
+        <canvas id="globeCanvas"></canvas>
+        <div id="globeLabels" class="glabels"></div>
+        <div class="globe-top">
+          <div class="seg" id="globeMode"><button data-m="globe" class="on">Globe</button><button data-m="above">Above me</button><button data-m="ride">Ride along</button><button data-m="nadir">Satellite's view</button></div>
+          <div class="globe-find"><input id="globeSearch" placeholder="Find a satellite: ISS, Hubble, GOES, RADARSAT…" autocomplete="off"><div id="globeResults" class="search-results on"></div></div>
+        </div>
+        <button class="tool globe-layers-btn" id="globeLayersBtn"><b>≡</b><span>Groups</span></button>
+        <div class="card globe-groups" id="globeGroups" hidden></div>
+        <div class="card globe-sel" id="globeSel" hidden>
+          <button class="iconbtn close" id="gsClose" aria-label="Close">✕</button>
+          <p class="eyebrow" id="gsType"></p><h2 id="gsName"></h2><p class="small muted" id="gsHeight"></p>
+          <div class="pillrow"><button class="btn sm" id="gsInfo">Full profile</button><button class="btn ghost sm" id="gsRide">Ride along</button><button class="btn ghost sm" id="gsNadir">Satellite's view</button></div>
+        </div>
+        <div class="globe-hud"><span id="globeCount"></span><span id="globeTime" class="muted"></span>
+          <div class="seg small" id="globeSpeed"><button data-s="1" class="on">1×</button><button data-s="10">10×</button><button data-s="60">60×</button><button data-s="600">600×</button><button data-s="0">Now</button></div></div>
+      </div>
+    </section>
+
+    <!-- EVENTS -->
+    <section class="view" id="view-events">
+      <h1>Sky calendar</h1>
+      <p class="muted">Meteor showers, eclipses, comets and planets for the next two years, worked out for where you are.</p>
+      <div class="seg" id="calFilter"><button data-f="all" class="on">All</button><button data-f="meteor">Meteors</button><button data-f="eclipse">Eclipses</button><button data-f="comet">Comets</button><button data-f="planet">Planets</button><button data-f="moon">Moon &amp; seasons</button></div>
+      <div id="calList"></div>
+    </section>
+
+    <!-- FEED -->
+    <section class="view" id="view-feed">
+      <div class="feed-head">
+        <h1>Space feed</h1>
+        <div class="seg" id="feedFilter">
+          <button data-f="all" class="on">All</button><button data-f="NASA">NASA</button><button data-f="ESA">ESA</button><button data-f="CSA">CSA</button><button data-f="launch">Launches</button>
+        </div>
+      </div>
+      <div class="grid-feed">
+        <div class="card apod" id="apodCard"><p class="muted">Loading NASA picture of the day…</p></div>
+        <div class="card" id="issNow"><div class="card-h"><h2>ISS right now</h2></div><div id="issNowBody" class="kv"></div></div>
+      </div>
+      <div class="card"><div class="card-h"><h2>Upcoming launches</h2><span class="muted small">The Space Devs</span></div><div id="launchList" class="list"></div></div>
+      <div class="card"><div class="card-h"><h2>News</h2><span class="muted small">Spaceflight News API</span></div><div id="newsList" class="news"></div></div>
+    </section>
+
+    <!-- RADIO -->
+    <section class="view" id="view-radio">
+      <h1>Radio</h1>
+      <p class="muted">A soundtrack for the dark. Mission audio, space ambient, local stations and live air traffic wherever you are.</p>
+      <div class="player card" id="player">
+        <div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="player-meta"><b id="nowTitle">Nothing playing</b><span id="nowSub" class="muted small">Pick a channel below</span></div>
+        <button class="iconbtn big" id="playPause" aria-label="Play or pause">▶</button>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
+        <audio id="audio" preload="none"></audio>
+      </div>
+      <div class="card"><div class="card-h"><h2>Deep Space Network, live</h2><span class="muted small" id="dsnTime">NASA DSN Now</span></div>
+        <p class="small muted" style="margin-top:-6px">Which giant dishes in California, Spain and Australia are talking to which spacecraft right now.</p>
+        <div id="dsnList" class="list"></div></div>
+      <div class="card"><div class="card-h"><h2>Listen to the ISS yourself</h2><span class="muted small">Amateur radio</span></div><div id="issRadio"></div></div>
+      <div class="card"><div class="card-h"><h2>Space agencies live</h2></div><div class="list" id="agencyLive"></div></div>
+      <div class="card"><div class="card-h"><h2>Space channels</h2><span class="muted small">SomaFM, listener supported</span></div><div id="spaceChannels" class="stations"></div></div>
+      <div class="card"><div class="card-h"><h2>Air traffic control near you</h2><span class="muted small">Opens LiveATC</span></div><div id="atcList" class="list"></div></div>
+      <div class="card"><div class="card-h"><h2>Local stations</h2><span class="muted small" id="localWhere">Radio Browser</span></div><div id="localStations" class="stations"></div></div>
+      <div class="card"><div class="card-h"><h2>Listen further</h2></div><div class="list" id="radioLinks"></div></div>
+    </section>
+
+    <!-- LAB (desktop) -->
+    <section class="view" id="view-lab">
+      <h1>Lab</h1>
+      <p class="muted">Desktop tools for working out what you saw and exploring agency imagery.</p>
+      <div class="lab-grid">
+        <div class="card" id="overheadCard">
+          <div class="card-h"><h2>What just passed overhead?</h2></div>
+          <form id="overheadForm" class="form">
+            <label>When<input type="datetime-local" id="ohWhen" required></label>
+            <label>Came from<select id="ohFrom"></select></label>
+            <label>Went toward<select id="ohTo"></select></label>
+            <label>Highest point<select id="ohAlt"><option value="15">Low, near horizon</option><option value="35">Partway up</option><option value="60" selected>High</option><option value="85">Straight overhead</option></select></label>
+            <label>Lasted about<select id="ohDur"><option value="10">Under 10 s</option><option value="60">About a minute</option><option value="180" selected>2 to 4 minutes</option><option value="400">Longer</option></select></label>
+            <label>Looked like<select id="ohKind"><option value="steady">Steady moving dot</option><option value="train">String of dots in a line</option><option value="flash">Brief bright flash/streak</option><option value="blink">Blinking lights</option><option value="still">Bright, not moving</option></select></label>
+            <label class="check"><input type="checkbox" id="ohStarlink" checked> Include Starlink (slower)</label>
+            <button class="btn" type="submit">Identify</button>
+          </form>
+          <div id="overheadResults" class="list"></div>
+        </div>
+        <div class="card" id="imageryCard">
+          <div class="card-h"><h2>Agency imagery</h2></div>
+          <form id="imgForm" class="form row"><input id="imgQuery" placeholder="Carina Nebula, Saturn, Great Lakes…" value="nebula"><select id="imgAgency"><option value="">All agencies</option><option value="NASA">NASA</option><option value="ESA">ESA</option><option value="CSA">CSA</option><option value="JWST">Webb</option><option value="Hubble">Hubble</option></select><button class="btn">Search</button></form>
+          <div class="seg small" id="imgPresets"><button data-q="EPIC">Earth today (EPIC)</button><button data-q="Webb">Latest Webb</button><button data-q="Hubble">Hubble</button><button data-q="ISS Earth observation">From the ISS</button><button data-q="aurora">Aurora</button></div>
+          <div id="imgGrid" class="img-grid"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>What am I looking at?</h2></div>
+          <p>Have a photo of the night sky? Astrometry.net will plate-solve it and name every star, galaxy and nebula in frame.</p>
+          <p><a class="btn ghost" href="https://nova.astrometry.net/upload" target="_blank" rel="noopener">Upload a sky photo ↗</a></p>
+          <p class="muted small">Or switch to the Sky tab, set the time with the slider and click any point to identify it.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- object info sheet -->
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-card">
+    <button class="iconbtn close" id="sheetClose" aria-label="Close">✕</button>
+    <div class="sheet-grab"></div>
+    <div class="sheet-body">
+      <div class="model-wrap" id="modelWrap" hidden><canvas id="modelCanvas"></canvas><img id="modelImg" alt=""></div>
+      <p class="eyebrow" id="objType"></p>
+      <h2 id="objName"></h2>
+      <div class="kv" id="objFacts"></div>
+      <p id="objWiki" class="wiki"></p>
+      <div class="pillrow" id="objActions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- dialogs -->
+<dialog id="locDialog" class="dlg">
+  <form method="dialog">
+    <h2>Location</h2>
+    <button class="btn" id="useGps" type="button">Use my current location</button>
+    <label>Search a place<input id="placeQuery" placeholder="Atacama, Hamilton, Tenerife…" autocomplete="off"></label>
+    <div id="placeResults" class="list"></div>
+    <div class="row"><label>Lat<input id="latIn" type="number" step="0.0001"></label><label>Lon<input id="lonIn" type="number" step="0.0001"></label></div>
+    <div class="row end"><button class="btn ghost" value="cancel">Close</button><button class="btn" id="setLatLon" type="button">Set</button></div>
+  </form>
+</dialog>
+<dialog id="setDialog" class="dlg">
+  <form method="dialog">
+    <h2>Settings</h2>
+    <label class="check"><input type="checkbox" id="autoNight"> Switch to Stargazer automatically after dusk</label>
+    <label class="check"><input type="checkbox" id="use24"> 24-hour clock</label>
+    <label>NASA API key <small class="muted">(optional; DEMO_KEY is rate limited)</small><input id="nasaKey" placeholder="DEMO_KEY"></label>
+    <p class="small muted">Compass offset: <span id="calOffset">0°</span> <button class="btn ghost sm" id="resetCal" type="button">Reset</button></p>
+    <p class="small muted">Data: Open-Meteo, CelesTrak, NOAA SWPC, The Space Devs, Spaceflight News API, NASA, Wikipedia, Radio Browser, SomaFM, OurAirports, d3-celestial. Textures: NASA (Moon, Jupiter, Earth), Solar System Scope (Saturn, CC BY 4.0); others procedural.</p>
+    <div class="row end"><button class="btn">Done</button></div>
+  </form>
+</dialog>
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
