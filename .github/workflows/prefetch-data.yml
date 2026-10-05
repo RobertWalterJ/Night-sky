@@ -1,0 +1,58 @@
+name: Prefetch sky data
+
+# Every 3 hours: download satellite and event data once (politely) and publish it to the `data` branch,
+# which the app reads. CelesTrak refuses re-downloads within 2 hours, so phones should not hit it directly.
+# The `data` branch is replaced on every run (no history), so the repository does not grow.
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/prefetch-data.yml'
+      - '.github/scripts/prefetch.mjs'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prefetch-data
+  cancel-in-progress: false
+
+jobs:
+  prefetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get the previous snapshot, if there is one
+        run: |
+          mkdir -p out
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git fetch --depth=1 origin data:refs/remotes/origin/data
+            git --work-tree=out checkout origin/data -- .
+            git reset -q
+          fi
+          ls -la out || true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download fresh data
+        env:
+          OUT: out
+        run: node .github/scripts/prefetch.mjs
+
+      - name: Publish to the data branch
+        run: |
+          cd out
+          rm -rf .git
+          git init -q -b data
+          git config user.name 'sky-data-bot'
+          git config user.email 'sky-data-bot@users.noreply.github.com'
+          git add -A
+          git commit -q -m "Sky data $(date -u +%Y-%m-%dT%H:%MZ)"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push --force origin data:data

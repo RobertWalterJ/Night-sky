@@ -1,9 +1,9 @@
 // Offline support: app shell + catalogue + models are cached; live data is network-first with cache fallback
-const VERSION = 'nightsky-v5-16';
+const VERSION = 'nightsky-v5-17';
 const PREFIX = 'nightsky-'; // all apps share one origin: only ever touch our own caches
 const SHELL = [
   './', 'index.html', 'css/app.css',
-  'js/app.js', 'js/util.js', 'js/astro.js', 'js/sky.js', 'js/ar3d.js', 'js/sats.js', 'js/tonight.js', 'js/info.js', 'js/feed.js', 'js/radio.js', 'js/sound.js', 'js/soundviz.js', 'js/lab.js', 'js/overhead.js', 'js/events.js', 'js/earth.js', 'js/calendar.js', 'js/comets.js', 'js/satinfo.js', 'js/spacecomms.js', 'js/darksky.js',
+  'js/app.js', 'js/util.js', 'js/astro.js', 'js/sky.js', 'js/ar3d.js', 'js/sats.js', 'js/tonight.js', 'js/info.js', 'js/feed.js', 'js/radio.js', 'js/livedata.js', 'js/sound.js', 'js/soundviz.js', 'js/lab.js', 'js/overhead.js', 'js/events.js', 'js/earth.js', 'js/calendar.js', 'js/comets.js', 'js/satinfo.js', 'js/spacecomms.js', 'js/darksky.js',
   'vendor/three.module.min.js', 'vendor/astronomy.browser.min.js', 'vendor/satellite.min.js',
   'vendor/jsm/loaders/GLTFLoader.js', 'vendor/jsm/utils/BufferGeometryUtils.js', 'vendor/jsm/controls/OrbitControls.js',
   'data/sky.json', 'data/airports.json',
@@ -22,6 +22,10 @@ self.addEventListener('fetch', e => {
   if (/somafm|radio-browser|mediacp|stream|icecast|dsn\/data/i.test(u.href) || e.request.destination === 'audio') return; // never cache streams
   if (u.origin === location.origin) {
     e.respondWith(caches.open(VERSION).then(c => c.match(e.request, { ignoreSearch: true })).then(r => r || fetch(e.request).then(res => { if (res.ok) { const cp = res.clone(); caches.open(VERSION).then(c => c.put(e.request, cp)); } return res; })));
+  } else if (u.host === 'raw.githubusercontent.com') {
+    // data snapshots: network first, last copy offline. Cached under a fixed key so each new snapshot replaces the old one.
+    const key = u.origin + u.pathname;
+    e.respondWith(fetch(e.request).then(res => { if (res.ok) { const cp = res.clone(); caches.open(VERSION + '-data').then(c => c.put(key, cp)); } return res; }).catch(() => caches.open(VERSION + '-data').then(c => c.match(key)).then(r => r || Response.error())));
   } else if (/open-meteo|celestrak|swpc|wikipedia|thespacedevs|spaceflightnewsapi|nasa\.gov|djlorenz/.test(u.host)) {
     e.respondWith(fetch(e.request).then(res => { if (res.ok) { const cp = res.clone(); caches.open(VERSION + '-data').then(c => c.put(e.request, cp)); } return res; }).catch(() => caches.open(VERSION + '-data').then(c => c.match(e.request))));
   }

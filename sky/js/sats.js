@@ -1,17 +1,20 @@
 // Satellite tracking: CelesTrak TLEs + SGP4 (satellite.js)
 import { state, store, D2R, R2D, now, cachedJSON } from './util.js';
 import { enuFromAltAz } from './astro.js';
+import { snapshotText } from './livedata.js';
 const S = window.satellite, A = window.Astronomy;
 const RE = 6371;
 
-export const sats = { list: [], byGroup: {}, ready: false };
+export const sats = { list: [], byGroup: {}, ready: false, source: {} };
 const KNOWN = { 25544: { std: -1.8, model: 'iss', nick: 'ISS' }, 48274: { std: -0.8, model: 'satellite', nick: 'Tiangong' }, 20580: { std: 2.0, model: 'hubble', nick: 'Hubble' } };
 
 export async function loadGroup(group) {
   if (sats.byGroup[group]) return sats.byGroup[group];
   const ttl = group === 'active' || group === 'starlink' ? 360 : 240;
-  let txt;
-  try { txt = await cachedJSON(`https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`, ttl, { text: true }); }
+  // 1. the 3-hourly snapshot (no rate limit worries), 2. the live source
+  let txt = await snapshotText(`tle/${group}.txt`).catch(() => null);
+  sats.source[group] = txt ? 'snapshot' : 'live';
+  if (!txt) try { txt = await cachedJSON(`https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`, ttl, { text: true }); }
   catch (e) {
     if (group !== 'stations') throw e;
     // fallback: ISS elements from wheretheiss.at if CelesTrak is unreachable or rate limiting

@@ -165,7 +165,7 @@ async function boot() {
 
   await loadCatalog();
   autoTheme(); setInterval(autoTheme, 5 * 60000);
-  initSky(); initFeed(); import('./sound.js').then(m => m.initSound()).catch(e => console.warn('sky sound', e)); initRadio(); initLab(); initOverhead(); initEarth(); initCalendar();
+  initSky(); initFeed(); import('./livedata.js').then(m => m.initDataStatus()).catch(() => { }); import('./sound.js').then(m => m.initSound()).catch(e => console.warn('sky sound', e)); initRadio(); initLab(); initOverhead(); initEarth(); initCalendar();
   on('nav', v => go(v));
   hero = createSky($('#heroCanvas'), { mode: 'dome', mini: true, onTap: () => go('overhead') });
   $$('.bortle').forEach(i => i.value = state.bortle);

@@ -62,7 +62,14 @@ export function modelFor(sat, satcat) {
 }
 
 const OWNERS = { US: 'United States', PRC: 'China', CIS: 'Russia / former USSR', ESA: 'European Space Agency', CA: 'Canada', JPN: 'Japan', IND: 'India', FR: 'France', UK: 'United Kingdom', GER: 'Germany', IT: 'Italy', ISS: 'ISS partners', SES: 'SES', EUTE: 'Eutelsat', O3B: 'O3b', GLOB: 'Globalstar', ORB: 'Orbcomm', ITSO: 'Intelsat', AB: 'Arab Satellite Communications Organization', KOR: 'South Korea', ISRA: 'Israel', BRAZ: 'Brazil', SPN: 'Spain', AUS: 'Australia', NZ: 'New Zealand', TURK: 'Türkiye', UAE: 'United Arab Emirates', EUME: 'EUMETSAT', SAFR: 'South Africa', ARGN: 'Argentina', TBD: 'Unknown' };
+let scP = null;
 export async function satcat(norad) {
+  // the trimmed SATCAT snapshot first (instant, no rate limit), then the live record
+  try {
+    const { snapshotJSON } = await import('./livedata.js'); scP ||= snapshotJSON('satcat-min.json', 48 * 3600e3);
+    const m = await scP, r = m?.rows?.[norad];
+    if (r) { const o = Object.fromEntries(m.cols.map((c, i) => [c, r[i]])); o.NORAD_CAT_ID = norad; const rcs = parseFloat(o.RCS); o.RCS_SIZE = isFinite(rcs) ? (rcs < 0.1 ? 'SMALL' : rcs < 1 ? 'MEDIUM' : 'LARGE') : ''; return o; }
+  } catch { }
   try { const r = await cachedJSON(`https://celestrak.org/satcat/records.php?CATNR=${norad}&FORMAT=JSON`, 60 * 24 * 7); return Array.isArray(r) ? r[0] : null; } catch { return null; }
 }
 export const ownerName = c => OWNERS[c] || c || '';
