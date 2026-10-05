@@ -32,6 +32,13 @@ function tone(t, hz, len, o = {}) { // sine with attack/decay, optional glide, t
   if (o.echo) { const d = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain(); d.delayTime.value = o.echo; fb.gain.value = .45; wet.gain.value = .5; out.connect(d); d.connect(fb); fb.connect(d); d.connect(wet); wet.connect(ctx.destination); }
   osc.start(t); osc.stop(t + len + .1);
 }
+function shipBell(t, hz = 880, vol = .28) { // struck bell: two partials plus a bright FM strike that dies away quickly
+  const car = ctx.createOscillator(), mod = ctx.createOscillator(), mg = ctx.createGain(), g = ctx.createGain(), car2 = ctx.createOscillator(), g2 = ctx.createGain();
+  car.frequency.value = hz; mod.frequency.value = hz * 1.41; mg.gain.setValueAtTime(hz * 1.6, t); mg.gain.exponentialRampToValueAtTime(hz * .02, t + 1.2); mod.connect(mg); mg.connect(car.frequency);
+  car2.frequency.value = hz * 2.76; g2.gain.setValueAtTime(vol * .35, t); g2.gain.exponentialRampToValueAtTime(.0001, t + 1.1); car2.connect(g2); g2.connect(ctx.destination);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .004); g.gain.exponentialRampToValueAtTime(.0001, t + 3); car.connect(g); g.connect(ctx.destination);
+  [car, mod, car2].forEach(o => { o.start(t); o.stop(t + 3.2); });
+}
 const SOUNDS = [
   ['A', 'Beep before and after speaking', 'Two short, squeaky, high beeps, one before and one after a voice call (the Quindar tones: 2525 Hz, then 2475 Hz).', t => { tone(t, 2525, .25, { hold: true, vol: .22 }); tone(t + 1.3, 2475, .25, { hold: true, vol: .22 }); }, 2.1],
   ['B', 'Beep, beep (Sputnik style)', 'Alternating beeps in two tones, about a third of a second each. The first satellite sounded like this on radios.', t => { for (let i = 0; i < 6; i++) tone(t + i * .55, i % 2 ? 1900 : 1300, .33, { hold: true, vol: .25 }); }, 3.6],
@@ -41,6 +48,8 @@ const SOUNDS = [
   ['F', 'Pulsing beeps, steady', 'A steady high beep pulsing like a heartbeat, the way a beacon repeats.', t => { for (let i = 0; i < 8; i++) tone(t + i * .5, 2200, .22, { hold: true, vol: .22 }); }, 4.3],
   ['G', 'Telemetry warble', 'Fast chatter between two tones, like data being sent.', t => { for (let i = 0; i < 40; i++) tone(t + i * .05, i % 3 ? 1200 : 2200, .045, { hold: true, vol: .15, attack: .004, rel: .005 }); }, 2.4],
   ['H', 'Stepped tones', 'A staircase of tones climbing up, like a ranging sequence.', t => { [700, 900, 1150, 1450, 1850, 2350].forEach((f, i) => tone(t + i * .22, f, .2, { hold: true, vol: .22 })); }, 1.8],
+  ['I', "Ship's bell", 'Two strikes of a bright brass bell, ding... ding. A navy tradition on the ISS: rung when someone arrives or leaves.', t => { shipBell(t); shipBell(t + 1.5); }, 4.8],
+  ['J', 'Bell, then call beep', 'A single arrival bell followed by the Quindar-style beep. A possible sound for something docking at the station.', t => { shipBell(t, 740); tone(t + 1.6, 2525, .25, { hold: true, vol: .22 }); }, 3],
 ];
 const list = document.getElementById('list');
 for (const [k, title, desc, fn, dur] of SOUNDS) {
