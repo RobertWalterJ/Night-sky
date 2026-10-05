@@ -10,10 +10,10 @@ import { cat } from './astro.js';
 const S = window.satellite, A = window.Astronomy, RE = 6371;
 
 const GROUPS = [
-  ['stations', 'Space stations', 0xffd27a, true], ['visual', 'Brightest', 0xffffff, true], ['starlink', 'Starlink', 0x7fb2ff, false],
-  ['oneweb', 'OneWeb', 0x9a8cff, false], ['gnss', 'Navigation (GPS etc.)', 0x7dffa0, true], ['geo', 'Geostationary', 0xffa45c, true],
-  ['weather', 'Weather', 0x5ce1ff, true], ['resource', 'Earth observation', 0x4dd2a6, true], ['science', 'Science', 0xd18cff, true],
-  ['amateur', 'Amateur radio', 0xff7ab8, false], ['cubesat', 'CubeSats', 0xc0c0c0, false],
+  ['stations', 'Space stations', 0xffd23c, true], ['visual', 'Brightest', 0xffffff, true], ['starlink', 'Starlink', 0xff5fb5, false],
+  ['oneweb', 'OneWeb', 0xff9a2e, false], ['gnss', 'Navigation (GPS etc.)', 0x8dff4a, true], ['geo', 'Geostationary', 0xff5547, true],
+  ['weather', 'Weather', 0xf2ff5c, true], ['resource', 'Earth observation', 0xc9ff9a, true], ['science', 'Science', 0xff8cf0, true],
+  ['amateur', 'Amateur radio', 0xffb08a, false], ['cubesat', 'CubeSats', 0xe0e0e0, false],
 ];
 const groupOn = store.get('globeGroups', Object.fromEntries(GROUPS.map(g => [g[0], g[3] || (g[0] === 'starlink' && matchMedia('(min-width: 1000px)').matches)])));
 
@@ -85,10 +85,10 @@ export function initEarth() {
   addStars(); setTimeout(addStars, 2000);
   // round sprite for satellite points
   const sc = document.createElement('canvas'); sc.width = sc.height = 64; const sx = sc.getContext('2d');
-  const gr = sx.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, '#fff'); gr.addColorStop(.35, '#fff'); gr.addColorStop(.5, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); sx.fillStyle = gr; sx.fillRect(0, 0, 64, 64);
+  sx.fillStyle = 'rgba(0,0,0,.85)'; sx.beginPath(); sx.arc(32, 32, 30, 0, 7); sx.fill(); sx.fillStyle = '#fff'; sx.beginPath(); sx.arc(32, 32, 20, 0, 7); sx.fill(); // white core takes the group colour, black rim separates it from anything behind
   const dot = new THREE.CanvasTexture(sc);
   ptsGeo = new THREE.BufferGeometry();
-  pts = new THREE.Points(ptsGeo, new THREE.PointsMaterial({ size: 4.5, sizeAttenuation: false, vertexColors: true, map: dot, transparent: true, depthWrite: false, alphaTest: .02 }));
+  pts = new THREE.Points(ptsGeo, new THREE.PointsMaterial({ size: 7, sizeAttenuation: false, vertexColors: true, map: dot, transparent: true, depthWrite: false, alphaTest: .02 }));
   pts.frustumCulled = false; scene.add(pts);
   hiGeo = new THREE.BufferGeometry();
   hiPts = new THREE.Points(hiGeo, new THREE.PointsMaterial({ size: 13, sizeAttenuation: false, color: 0xffe066, map: dot, transparent: true, opacity: .55, depthWrite: false }));
@@ -151,7 +151,7 @@ function update(i, t, sunD = sunScene(t), o = obsVec(), on_ = o.clone().normaliz
   // about to rise? look 5 minutes ahead for nearby satellites still below the horizon
   it.rising = false;
   if (!it.up && it.p.clone().normalize().dot(on_) > .55) { const f = ecef(it.s, new Date(+t + 300e3)); if (f) { const q = toScene(f.x, f.y, f.z); const dq = q.sub(o); it.rising = dq.dot(on_) / dq.length() > 0; } }
-  const k = lit ? 1 : .32;
+  const k = lit ? 1 : .55;
   C.setXYZ(i, it.color.r * k, it.color.g * k, it.color.b * k);
 }
 
