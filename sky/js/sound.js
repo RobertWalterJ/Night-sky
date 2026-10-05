@@ -37,7 +37,7 @@ function makeIR(ctx, secs) {
 }
 
 export function createEngine(ctx, o = {}) {
-  const layers = { sats: true, planets: true, mw: true, stars: true, ...(o.layers || {}) };
+  const layers = { sats: true, planets: true, mw: true, stars: true, retro: true, ...(o.layers || {}) };
   let threeD = !!o.threeD;
   const out = o.output || ctx.destination;
   const master = ctx.createGain(); master.gain.value = o.volume ?? .5;
@@ -108,6 +108,31 @@ export function createEngine(ctx, o = {}) {
     const pn = route(g, az, alt, .6); o2.start(t); tidy(o2, [lp, g, pn.node], t + 1.2);
   }
 
+  // ----- retro mission tones (man-made objects only) -----
+  // Quindar beeps: NASA put a 2525 Hz beep before and a 2475 Hz beep after a voice call. Here they bracket a pass:
+  // the first beep as a station comes into view, the second as it leaves.
+  function quindar(t, up, az, alt, vol) {
+    const o2 = ctx.createOscillator(), g = ctx.createGain(); o2.frequency.value = up ? 2525 : 2475;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .006); g.gain.setValueAtTime(vol, t + .22); g.gain.linearRampToValueAtTime(0, t + .25);
+    o2.connect(g); fire({ k: 'sweep', up, az, alt }, t);
+    const pn = route(g, az, alt, .35); o2.start(t); tidy(o2, [g, pn.node], t + .3);
+  }
+  // Sputnik-style double beep for small beacon satellites: a lower then a higher tone.
+  function sputnik(t, az, alt, vol) {
+    [[0, 1300], [.2, 1900]].forEach(([dt, hz]) => {
+      const o2 = ctx.createOscillator(), g = ctx.createGain(); o2.frequency.value = hz;
+      g.gain.setValueAtTime(0, t + dt); g.gain.linearRampToValueAtTime(vol, t + dt + .006); g.gain.setValueAtTime(vol, t + dt + .14); g.gain.linearRampToValueAtTime(0, t + dt + .17);
+      o2.connect(g); const pn = route(g, az, alt, .4); o2.start(t + dt); tidy(o2, [g, pn.node], t + dt + .22);
+    });
+    fire({ k: 'ping', group: 'cubesat', id: 'sputnik', az, alt, vol: Math.min(1, vol * 3) }, t);
+  }
+  let lastQ = -9;
+  // coming into view / leaving view for a satellite: stations and the brightest get the Quindar beeps (at most one every 3 s)
+  function satCue(at, s, up, base) {
+    if (layers.retro && (s.group === 'stations' || s.group === 'visual') && at - lastQ > 3) { lastQ = at; quindar(at, up, s.az, s.alt, .09); }
+    else sweep(at, altHz(s.alt, base), up, up ? .09 : .08, s.az, s.alt);
+  }
+
   // ----- persistent voices -----
   const padGain = ctx.createGain(), padLP = ctx.createBiquadFilter(), padLFO = ctx.createOscillator(), padLFOg = ctx.createGain();
   padGain.gain.value = 0; padLP.type = 'lowpass'; padLP.Q.value = 3; padLP.frequency.value = 400;
@@ -171,14 +196,14 @@ export function createEngine(ctx, o = {}) {
       const want = (layers.sats ? sky.sats : []).filter(s => s.alt > 0).sort((a, b) => (PRIORITY[a.group] ?? 6) - (PRIORITY[b.group] ?? 6) || (a.mag ?? 9) - (b.mag ?? 9)).slice(0, 6);
       const ids = new Set(want.map(s => s.id));
       api.voiced = want.map(s => ({ id: s.id, name: s.name, group: s.group, alt: s.alt, az: s.az, up: s.alt >= (satT.get(s.id)?.alt ?? s.alt) }));
-      for (const [id, st] of satT) if (!ids.has(id)) { const [, base] = GROUP[st.group] || GROUP.visual; sweep(at, altHz(st.alt, base), false, .08, st.az, st.alt); satT.delete(id); }
+      for (const [id, st] of satT) if (!ids.has(id)) { const [, base] = GROUP[st.group] || GROUP.visual; satCue(at, st, false, base); satT.delete(id); }
       for (const s of want) {
         const spec = GROUP[s.group] || GROUP.visual, [fam, base, every, lvl] = spec; let st = satT.get(s.id);
-        if (!st) { st = { next: at + .6, group: s.group }; satT.set(s.id, st); sweep(at, altHz(s.alt, base), true, .09, s.az, s.alt); }
+        if (!st) { st = { next: at + .6, group: s.group }; satT.set(s.id, st); satCue(at, s, true, base); }
         st.alt = s.alt; st.az = s.az;
         if (at >= st.next) {
           const hz = altHz(s.alt, base), vol = lvl * (.35 + .65 * smooth(s.alt / 40)) * (s.lit ? 1 : .45);
-          if (fam === 'bell') bell(at + .02, hz, s.az, s.alt, vol); else if (fam === 'pluck') pluck(at + .02, hz, s.az, s.alt, vol); else hum(at + .02, hz, s.az, s.alt, vol);
+          if (fam === 'bell') bell(at + .02, hz, s.az, s.alt, vol); else if (fam === 'pluck' && layers.retro && (s.group === 'cubesat' || s.group === 'amateur')) sputnik(at + .02, s.az, s.alt, vol * .8); else if (fam === 'pluck') pluck(at + .02, hz, s.az, s.alt, vol); else hum(at + .02, hz, s.az, s.alt, vol);
           fire({ k: 'ping', group: s.group, id: s.id, az: s.az, alt: s.alt, vol: Math.min(1, vol * 3) }, at + .02);
           st.next = at + every * (1.25 - .5 * smooth(s.alt / 60));
         }
@@ -219,7 +244,7 @@ export function readSky(t) {
 
 // ---------- the Listen panel and the live loop ----------
 let ctx = null, eng = null, timer = null, audioEl = null, viz = null;
-const layerStore = () => ({ sats: true, planets: true, mw: true, stars: true, ...store.get('soundLayers', {}) });
+const layerStore = () => ({ sats: true, planets: true, mw: true, stars: true, retro: true, ...store.get('soundLayers', {}) });
 export const isPlaying = () => !!eng;
 
 export async function startSound() {
