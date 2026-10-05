@@ -8,6 +8,7 @@ import { $, $$, clamp, D2R, store, state, now, compass, toast } from './util.js'
 import { visibleSats, sats } from './sats.js';
 import { solarSystem, eqjToEnuFn, radecVec, altAzFromEnu, GALACTIC_CENTRE, nelm } from './astro.js';
 import { milkyWayAt, starCount } from './overhead.js';
+import { createViz } from './soundviz.js';
 
 const SCALE = [0, 2, 3, 5, 7, 9, 10]; // D Dorian from the root
 const ROOT = 2;                        // D = pitch class 2
@@ -66,6 +67,8 @@ export function createEngine(ctx, o = {}) {
     g.connect(pn.node); pn.node.connect(dry); g.connect(s); s.connect(fx);
     return pn;
   }
+  // tell the visual when something sounds (at the moment it is heard)
+  const fire = (e, t) => { if (o.onEvent) setTimeout(() => o.onEvent(e), Math.max(0, (t - ctx.currentTime) * 1000)); };
   const tidy = (src, nodes, t) => { src.stop(t); src.onended = () => nodes.forEach(n => { try { n.disconnect(); } catch { } }); };
   const perc = (g, t, a, d, peak) => { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(peak, .0002), t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + d); };
 
@@ -99,6 +102,7 @@ export function createEngine(ctx, o = {}) {
     o2.type = 'triangle'; lp.type = 'lowpass'; lp.frequency.value = 1800;
     o2.frequency.setValueAtTime(up ? hz / 2 : hz, t); o2.frequency.exponentialRampToValueAtTime(up ? hz : hz / 2, t + .75);
     o2.connect(lp); lp.connect(g); perc(g, t, up ? .5 : .05, up ? .3 : .7, vol);
+    fire({ k: 'sweep', up, az, alt }, t);
     const pn = route(g, az, alt, .6); o2.start(t); tidy(o2, [lp, g, pn.node], t + 1.2);
   }
 
@@ -138,10 +142,12 @@ export function createEngine(ctx, o = {}) {
     setVolume(v) { master.gain.setTargetAtTime(v, ctx.currentTime, .1); },
     setLayer(k, v) { layers[k] = v; },
     set3D(v) { threeD = !!v; }, // applies to voices created from now on
+    voiced: [], bed: { mw: 0, gcAlt: -90 },
     step(at, sky) {
       const dark = sky.dark;
       // Milky Way bed: richer and brighter the more of the band is overhead
       const mwF = layers.mw ? sky.mw * dark : 0;
+      api.bed = { mw: mwF, gcAlt: sky.gc.alt };
       padGain.gain.setTargetAtTime(layers.mw ? (.025 + .05 * mwF) * (.4 + .6 * dark) : 0, at, 2.5);
       padLP.frequency.setTargetAtTime(280 + 1200 * mwF, at, 2.5);
       // galactic centre: a deep warm swell that moves as it climbs and sinks
@@ -162,6 +168,7 @@ export function createEngine(ctx, o = {}) {
       // satellites: the most important few get a voice; others stay silent so it never turns to noise
       const want = (layers.sats ? sky.sats : []).filter(s => s.alt > 0).sort((a, b) => (PRIORITY[a.group] ?? 6) - (PRIORITY[b.group] ?? 6) || (a.mag ?? 9) - (b.mag ?? 9)).slice(0, 6);
       const ids = new Set(want.map(s => s.id));
+      api.voiced = want.map(s => ({ id: s.id, name: s.name, group: s.group, alt: s.alt, az: s.az, up: s.alt >= (satT.get(s.id)?.alt ?? s.alt) }));
       for (const [id, st] of satT) if (!ids.has(id)) { const [, base] = GROUP[st.group] || GROUP.visual; sweep(at, altHz(st.alt, base), false, .08, st.az, st.alt); satT.delete(id); }
       for (const s of want) {
         const spec = GROUP[s.group] || GROUP.visual, [fam, base, every, lvl] = spec; let st = satT.get(s.id);
@@ -170,6 +177,7 @@ export function createEngine(ctx, o = {}) {
         if (at >= st.next) {
           const hz = altHz(s.alt, base), vol = lvl * (.35 + .65 * smooth(s.alt / 40)) * (s.lit ? 1 : .45);
           if (fam === 'bell') bell(at + .02, hz, s.az, s.alt, vol); else if (fam === 'pluck') pluck(at + .02, hz, s.az, s.alt, vol); else hum(at + .02, hz, s.az, s.alt, vol);
+          fire({ k: 'ping', group: s.group, id: s.id, az: s.az, alt: s.alt, vol: Math.min(1, vol * 3) }, at + .02);
           st.next = at + every * (1.25 - .5 * smooth(s.alt / 60));
         }
       }
@@ -177,7 +185,7 @@ export function createEngine(ctx, o = {}) {
       if (layers.stars && dark > .05) {
         starAcc += clamp(sky.stars / 2200, 0, 1) * 2.4 * dark;
         let n = Math.floor(starAcc); starAcc -= n;
-        for (; n > 0; n--) { const deg = 14 + Math.floor(Math.random() * 8), az = Math.random() * 360, alt = 15 + Math.random() * 70; sparkle(at + Math.random() * .95, midiHz(degMidi(deg, 62)), az, alt, .06 + Math.random() * .05); }
+        for (; n > 0; n--) { const deg = 14 + Math.floor(Math.random() * 8), az = Math.random() * 360, alt = 15 + Math.random() * 70; const st = at + Math.random() * .95; sparkle(st, midiHz(degMidi(deg, 62)), az, alt, .06 + Math.random() * .05); fire({ k: 'spark', az, alt }, st); }
       }
     },
     summary(sky) {
@@ -210,7 +218,7 @@ export function readSky(t) {
 }
 
 // ---------- the Listen panel and the live loop ----------
-let ctx = null, eng = null, timer = null, audioEl = null;
+let ctx = null, eng = null, timer = null, audioEl = null, viz = null;
 const layerStore = () => ({ sats: true, planets: true, mw: true, stars: true, ...store.get('soundLayers', {}) });
 export const isPlaying = () => !!eng;
 
@@ -224,13 +232,14 @@ export async function startSound() {
     audioEl.srcObject = md.stream; await audioEl.play(); output = md;
     if (navigator.mediaSession) { navigator.mediaSession.metadata = new MediaMetadata({ title: 'Sky Sound', artist: 'Night Sky', album: 'Live from overhead' }); navigator.mediaSession.setActionHandler('pause', stopSound); navigator.mediaSession.setActionHandler('stop', stopSound); }
   } catch { output = ctx.destination; }
-  eng = createEngine(ctx, { layers: layerStore(), volume: +store.get('soundVol', .5), threeD: !!store.get('sound3d', false), output });
-  const tick = () => { if (!eng) return; const sky = readSky(now()); eng.step(ctx.currentTime, sky); const s = $('#soundStatus'); if (s) s.textContent = eng.summary(sky); };
+  eng = createEngine(ctx, { layers: layerStore(), volume: +store.get('soundVol', .5), threeD: !!store.get('sound3d', false), output, onEvent: e => viz?.event(e) });
+  viz?.start();
+  const tick = () => { if (!eng) return; const sky = readSky(now()); eng.step(ctx.currentTime, sky); viz?.update(sky, eng); const s = $('#soundStatus'); if (s) s.textContent = eng.summary(sky); };
   tick(); timer = setInterval(tick, 1000); paint();
 }
 export function stopSound() {
   clearInterval(timer); timer = null; eng?.stop(); eng = null; ctx = null; if (audioEl) { audioEl.pause(); audioEl.srcObject = null; }
-  const s = $('#soundStatus'); if (s) s.textContent = 'Stopped'; paint();
+  viz?.stop(); const s = $('#soundStatus'); if (s) s.textContent = 'Stopped'; paint();
 }
 function paint() {
   const on = isPlaying();
@@ -239,6 +248,7 @@ function paint() {
 }
 
 export function initSound() {
+  if ($('#soundViz')) { viz = createViz($('#soundViz'), $('#soundLegend')); viz.start(); viz.stop(); }
   const L = layerStore();
   $$('#soundLayers input[data-sl]').forEach(i => { i.checked = !!L[i.dataset.sl]; i.onchange = () => { L[i.dataset.sl] = i.checked; store.set('soundLayers', L); eng?.setLayer(i.dataset.sl, i.checked); }; });
   const vol = $('#soundVol'); if (vol) { vol.value = store.get('soundVol', .5); vol.oninput = () => { store.set('soundVol', +vol.value); eng?.setVolume(+vol.value); }; }

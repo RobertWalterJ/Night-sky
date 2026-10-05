@@ -351,6 +351,7 @@ export function createSky(cv, cfg = {}) {
 
     drawSelected(col, font, t);
     updateFind(t);
+    updateAim(col, font, t);
     if (anyG) ctx.drawImage(off.gnd, 0, 0, W, H);
     if (!dome && L.ground) drawHorizon(col, font);
     if (showBelow && L.isochrones) drawIsochroneLabels(col, font);
@@ -464,6 +465,42 @@ export function createSky(cv, cfg = {}) {
     if (o.ra != null && o.dec != null && o.kind === 'point') return toEnu(...radecVec(o.ra, o.dec));
     return o.v;
   }
+  // What am I pointing at? Names whatever is nearest the centre of the view, with a fist-sized circle to judge scale
+  // against your own eyes (one fist at arm's length is about 10 degrees).
+  let aimAt = 0, aimObj = null;
+  const KIND = { star: 'star', planet: 'planet', moon: 'the Moon', sun: 'the Sun', dso: 'deep-sky object', sat: 'satellite', const: 'constellation', comet: 'comet' };
+  function brightWords(o) {
+    if (o.kind === 'moon' || o.kind === 'planet') return 'bright, easy to see';
+    if (o.kind === 'sat') return 'a moving satellite';
+    if (o.kind === 'const') return 'a pattern of stars';
+    if (o.kind === 'dso') return 'faint: use binoculars or a dark sky';
+    const m = o.mag; if (m == null) return '';
+    return m < 0 ? 'one of the brightest stars' : m < 2 ? 'bright' : m < 4 ? 'easy to see' : m < 5.5 ? 'fainter, needs a dark sky' : 'faint: use binoculars';
+  }
+  function updateAim(col, font, t) {
+    const el = cfg.aim; if (!el) return;
+    if (!V.sensor || mini || dome) { if (!el.hidden) el.hidden = true; return; }
+    if (rect) { // fist-sized circle and crosshair
+      const r = F * Math.tan(5 * D2R);
+      ctx.save(); ctx.strokeStyle = col.sel; ctx.fillStyle = col.sel; ctx.globalAlpha = .8; ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(cx - 9, cy); ctx.lineTo(cx + 9, cy); ctx.moveTo(cx, cy - 9); ctx.lineTo(cx, cy + 9); ctx.stroke();
+      ctx.font = font(12, 600); ctx.textAlign = 'center'; ctx.fillText('1 fist', cx, cy + r + 15); ctx.restore();
+    }
+    if (performance.now() - aimAt < 150) return; aimAt = performance.now();
+    let best = null, bs = 1e9;
+    for (const h of hits) { const d = Math.hypot(h.x - cx, h.y - cy); if (d < Math.max(h.r, 22) + 26) { const sc = d - (h.pri || 0) * 8; if (sc < bs) { bs = sc; best = h; } } }
+    const o = best ? (best.obj || (best.star != null ? starInfo(best.star) : null)) : null;
+    const dir = unproject(best ? best.x : cx, best ? best.y : cy, [0, 0, 0]), aa = altAzFromEnu(dir), rd = enuToRaDec(dir[0], dir[1], dir[2], t), con = constellationOf(rd.ra, rd.dec);
+    aimObj = o; el.hidden = false; el.disabled = !o;
+    if (o) {
+      el.querySelector('.an').textContent = o.name || o.id;
+      el.querySelector('.ad').textContent = [KIND[o.kind] || '', brightWords(o), con && o.kind !== 'const' ? `in ${con}` : '', `${Math.round(aa.alt)}° up, ${compass(aa.az)}`].filter(Boolean).join(' · ');
+    } else {
+      el.querySelector('.an').textContent = 'Nothing named here';
+      el.querySelector('.ad').textContent = [con ? `Sky in ${con}` : '', `${Math.round(aa.alt)}° up, ${compass(aa.az)}`].filter(Boolean).join(' · ');
+    }
+  }
   // Point-and-find: plain-words guidance to the selected object while the phone is pointed at the sky.
   // One fist at arm's length is about 10 degrees.
   let foundNow = false;
@@ -561,6 +598,7 @@ export function createSky(cv, cfg = {}) {
     setActive(a) { active = a; dirty = true; if (!a && V.camera) api.toggleCamera(false); },
     select(o) { selected = o; track = null; dirty = true; },
     getSelected: () => selected,
+    pickAim() { if (aimObj) { selected = aimObj; track = null; emit('select', aimObj); dirty = true; } },
     goTo(obj) {
       selected = obj; track = null;
       const v = selectedVec(now());
@@ -610,11 +648,12 @@ export function createSky(cv, cfg = {}) {
 export let sky = null;
 export function initSky() {
   loadMilkyWay().then(() => sky?.invalidate());
-  sky = createSky(document.getElementById('skyCanvas'), { find: document.getElementById('findHud'), ar: document.getElementById('arCanvas'), video: document.getElementById('camVideo'), hud: { dir: document.getElementById('hudDir'), time: document.getElementById('hudTime') } });
+  sky = createSky(document.getElementById('skyCanvas'), { aim: document.getElementById('aimHud'), find: document.getElementById('findHud'), ar: document.getElementById('arCanvas'), video: document.getElementById('camVideo'), hud: { dir: document.getElementById('hudDir'), time: document.getElementById('hudTime') } });
   const $ = id => document.getElementById(id);
   $('btnSensor').onclick = async () => { await sky.toggleSensor(); $('btnSensor').classList.toggle('on', sky.V.sensor); };
   $('btnCamera').onclick = async () => { await sky.toggleCamera(); $('skyWrap').classList.toggle('cam', sky.V.camera); $('btnCamera').classList.toggle('on', sky.V.camera); $('btnSensor').classList.toggle('on', sky.V.sensor); };
   $('btnAlign').onclick = () => { const r = sky.align(); $('btnAlign').classList.toggle('on', r === 'armed'); };
+  $('aimHud').onclick = () => sky.pickAim();
   $('findHud').querySelector('.fb').onclick = async () => { await sky.toggleSensor(true); $('btnSensor').classList.toggle('on', sky.V.sensor); };
   $('findStop').onclick = () => sky.select(null);
   const lp = $('layersPanel');
