@@ -43,6 +43,8 @@ export function createEngine(ctx, o = {}) {
   const master = ctx.createGain(); master.gain.value = o.volume ?? .5;
   const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.knee.value = 18; comp.ratio.value = 4; comp.attack.value = .01; comp.release.value = .25;
   master.connect(comp); comp.connect(out);
+  const an = ctx.createAnalyser(); an.fftSize = 1024; comp.connect(an); const lvBuf = new Float32Array(1024);
+  const level = () => { an.getFloatTimeDomainData(lvBuf); let s = 0; for (let i = 0; i < lvBuf.length; i++) s += lvBuf[i] * lvBuf[i]; return Math.sqrt(s / lvBuf.length); };
   const dry = ctx.createGain(); dry.connect(master);
   // shared effects: hall reverb + tape-style echo
   const fx = ctx.createGain(), conv = ctx.createConvolver(), rv = ctx.createGain();
@@ -68,7 +70,7 @@ export function createEngine(ctx, o = {}) {
     return pn;
   }
   // tell the visual when something sounds (at the moment it is heard)
-  const fire = (e, t) => { if (o.onEvent) setTimeout(() => o.onEvent(e), Math.max(0, (t - ctx.currentTime) * 1000)); };
+  const fire = (e, t) => { if (o.onEvent) setTimeout(() => o.onEvent(e), Math.max(0, (t - ctx.currentTime + (ctx.outputLatency || ctx.baseLatency || 0)) * 1000)); };
   const tidy = (src, nodes, t) => { src.stop(t); src.onended = () => nodes.forEach(n => { try { n.disconnect(); } catch { } }); };
   const perc = (g, t, a, d, peak) => { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(peak, .0002), t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + d); };
 
@@ -142,7 +144,7 @@ export function createEngine(ctx, o = {}) {
     setVolume(v) { master.gain.setTargetAtTime(v, ctx.currentTime, .1); },
     setLayer(k, v) { layers[k] = v; },
     set3D(v) { threeD = !!v; }, // applies to voices created from now on
-    voiced: [], bed: { mw: 0, gcAlt: -90 },
+    voiced: [], bed: { mw: 0, gcAlt: -90 }, level,
     step(at, sky) {
       const dark = sky.dark;
       // Milky Way bed: richer and brighter the more of the band is overhead
@@ -191,7 +193,7 @@ export function createEngine(ctx, o = {}) {
     summary(sky) {
       const bits = [], st = sky.sats.filter(s => s.group === 'stations' && s.alt > 0)[0];
       if (st) bits.push(`${st.name} in the ${compass(st.az)}, ${Math.round(st.alt)}° up`);
-      const n = sky.sats.filter(s => s.alt > 0).length; if (n && layers.sats) bits.push(`${n} satellite${n > 1 ? 's' : ''} up`);
+      const n = sky.sats.filter(s => s.alt > 0).length; if (n && layers.sats) bits.push(`${Math.min(api.voiced.length, n)} of ${n} satellites playing`);
       const pl = sky.bodies.filter(b => b.alt > 0 && b.id !== 'Sun').map(b => b.id); if (pl.length && layers.planets) bits.push(pl.slice(0, 4).join(', ') + ' up');
       if (layers.mw && sky.mw * sky.dark > .25) bits.push('Milky Way overhead'); else if (layers.mw && sky.gc.alt > 5 && sky.dark > .3) bits.push(`Galactic centre rising in the ${compass(sky.gc.az)}`);
       return bits.length ? bits.join(' · ') : 'Quiet sky right now';
@@ -248,7 +250,7 @@ function paint() {
 }
 
 export function initSound() {
-  if ($('#soundViz')) { viz = createViz($('#soundViz'), $('#soundLegend')); viz.start(); viz.stop(); }
+  if ($('#soundViz')) { viz = createViz($('#soundViz'), { now: $('#soundNow'), pick: $('#soundPick') }); viz.stop(); }
   const L = layerStore();
   $$('#soundLayers input[data-sl]').forEach(i => { i.checked = !!L[i.dataset.sl]; i.onchange = () => { L[i.dataset.sl] = i.checked; store.set('soundLayers', L); eng?.setLayer(i.dataset.sl, i.checked); }; });
   const vol = $('#soundVol'); if (vol) { vol.value = store.get('soundVol', .5); vol.oninput = () => { store.set('soundVol', +vol.value); eng?.setVolume(+vol.value); }; }

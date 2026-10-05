@@ -1,119 +1,171 @@
 // Sky Sound visual: a live map of the sky that shows WHAT is making each sound, and where.
-// Looking straight up, north at the top, east on the right (the same left/right the sound uses).
-//  - a ripple expands from an object each time it sounds; bigger and brighter = louder
-//  - shape says the voice: diamond = station bell, circle = other satellite pluck, square = low swell,
-//    big disc = planet, pale disc = Moon, four-point flash = a star shimmer
-//  - a fading trail shows where a satellite has been
-//  - rising objects get an up arrow and a cool shift; setting ones a down arrow and a warm shift
-//    (in the red and green themes, where hue is not available, that becomes bright vs dim)
-//  - the soft glow is the Milky Way drone; its centre sits on the galactic centre
-import { $, D2R, css, compass } from './util.js';
+// Design rules this follows:
+//  - Signal over noise: only the few satellites that are actually sounding are drawn big and named; the rest are faint specks.
+//  - Plain names ("Rocket stage", "Space station"), never raw catalogue codes. Names are real words, 14px, with a halo so they read on any background.
+//  - Identity is never colour alone: every voice has its own SHAPE and a word; rising/setting is an arrow glyph + the word, with a cool/warm shift as a bonus.
+//  - Always-visible status: a "Now playing" row of chips that flash when their sound plays.
+//  - Tap any dot to ask "what is that?" (generous hit area).
+//  - Honest feedback: the drone glow follows the real audio level; ripples are delayed to match the phone's audio delay.
+//  - Calm: solid recessive hairlines, reduced motion respected, short text with the long explanation tucked away.
+// Looking straight up: centre = straight overhead, edge = the horizon, north at the top, east on the right
+// (the same left and right the sound uses).
+import { css, compass } from './util.js';
 
-export function createViz(cv, legendEl) {
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const D2R = Math.PI / 180;
+
+// plain-language names, so nobody has to know what "SL-16 R/B" means
+export function plainType(s) {
+  const n = s.name || '';
+  if (/R\/B|ROCKET|\bDEB\b|DEBRIS/i.test(n) || /^(SL-|CZ-|ARIANE|FALCON|ATLAS|DELTA)/i.test(n)) return /DEB/i.test(n) ? 'Debris' : 'Rocket stage';
+  return ({ stations: 'Space station', visual: 'Bright satellite', gnss: 'Navigation satellite', geo: 'Stationary satellite', weather: 'Weather satellite', resource: 'Earth-watching satellite', science: 'Science satellite', amateur: 'Amateur radio satellite', cubesat: 'Tiny cubesat', oneweb: 'Internet satellite', starlink: 'Internet satellite' })[s.group] || 'Satellite';
+}
+export const cleanName = n => (n || '').replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s*R\/B\s*/i, '').trim() || n;
+const shapeOf = group => group === 'stations' ? 'diamond' : (group === 'gnss' || group === 'geo') ? 'square' : 'circle';
+const GLYPH = { diamond: '◆', circle: '●', square: '■' };
+const VOICE = { stations: 'bell', gnss: 'low swell', geo: 'low swell' };
+const voiceOf = g => VOICE[g] || 'pluck';
+
+export function createViz(cv, els = {}) {
   const g = cv.getContext('2d');
   let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, R = 0;
-  const fx = [], trails = new Map(), prevAlt = new Map();
-  let sky = null, voiced = [], bed = { mw: 0, gcAlt: -90 }, running = false, raf = 0;
+  const fx = [], trails = new Map(), marks = [], placed = [];
+  let sky = null, voiced = [], bed = { mw: 0, gcAlt: -90 }, getLevel = () => 0, picked = null, lastNow = '';
+  const IDLE = 'Tap a shape on the map to see what it is.';
 
-  new ResizeObserver(() => { const r = cv.getBoundingClientRect(); DPR = Math.min(devicePixelRatio || 1, 2); W = r.width; H = r.height; cv.width = W * DPR; cv.height = H * DPR; g.setTransform(DPR, 0, 0, DPR, 0, 0); cx = W / 2; cy = H / 2; R = Math.min(W, H) / 2 - 26; }).observe(cv);
+  new ResizeObserver(() => { const r = cv.getBoundingClientRect(); DPR = Math.min(devicePixelRatio || 1, 2); W = r.width; H = r.height; cv.width = W * DPR; cv.height = H * DPR; g.setTransform(DPR, 0, 0, DPR, 0, 0); cx = W / 2; cy = H / 2; R = Math.min(W, H) / 2 - 30; }).observe(cv);
 
   const theme = () => document.documentElement.dataset.theme;
   const mono = () => theme() === 'stargazer' || theme() === 'terminal';
   const C = () => ({
-    bg: css('--sky-bg') || '#000', bg2: css('--sky-bg2') || '#000', text: css('--text') || '#fff', muted: css('--muted') || '#888', line: css('--line') || '#333', accent: css('--accent') || '#fff',
-    sat: css('--sky-sat') || '#fff', planet: css('--sky-planet') || '#fc8', moon: css('--sky-moon') || '#ddd', cons: css('--sky-const') || '#8af', mw: css('--sky-mw') || '#88a', star: css('--sky-star') || '#fff', font: css('--font') || 'system-ui',
-    up: mono() ? (css('--accent') || '#fff') : '#6fb0ff', down: mono() ? (css('--muted') || '#888') : '#ff7a55',
+    bg: css('--sky-bg') || '#000', bg2: css('--sky-bg2') || '#000', text: css('--text') || '#fff', muted: css('--muted') || '#999', line: css('--line') || '#333', accent: css('--accent') || '#fff',
+    sat: css('--sky-sat') || '#fff', planet: css('--sky-planet') || '#fc8', moon: css('--sky-moon') || '#ddd', mw: css('--sky-mw') || '#88a', star: css('--sky-star') || '#fff', font: css('--font') || 'system-ui',
+    up: mono() ? (css('--accent') || '#fff') : '#6fb0ff', down: mono() ? (css('--muted') || '#999') : '#ff7a55',
   });
   const pos = (az, alt) => { const r = R * (90 - Math.max(alt, -8)) / 90, a = az * D2R; return [cx + Math.sin(a) * r, cy - Math.cos(a) * r]; };
-  const alpha = (hex, a) => { const c = document.createElement('canvas').getContext('2d'); c.fillStyle = hex; const v = c.fillStyle; if (v[0] === '#') { const n = parseInt(v.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; } return v.replace(/rgba?\(([^)]+)\)/, (m, p) => { const q = p.split(',').slice(0, 3); return `rgba(${q.join(',')},${a})`; }); };
+  const colorCtx = document.createElement('canvas').getContext('2d');
+  const alpha = (c, a) => { colorCtx.fillStyle = c; const v = colorCtx.fillStyle; if (v[0] === '#') { const n = parseInt(v.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; } return v.replace(/rgba?\(([^)]+)\)/, (m, p) => `rgba(${p.split(',').slice(0, 3).join(',')},${a})`); };
 
   function shape(kind, x, y, r, fill) {
     g.fillStyle = fill; g.beginPath();
-    if (kind === 'diamond') { g.moveTo(x, y - r * 1.3); g.lineTo(x + r, y); g.lineTo(x, y + r * 1.3); g.lineTo(x - r, y); g.closePath(); }
-    else if (kind === 'square') { g.rect(x - r, y - r, r * 2, r * 2); }
+    if (kind === 'diamond') { g.moveTo(x, y - r * 1.35); g.lineTo(x + r, y); g.lineTo(x, y + r * 1.35); g.lineTo(x - r, y); g.closePath(); }
+    else if (kind === 'square') g.rect(x - r, y - r, r * 2, r * 2);
     else if (kind === 'spark') { g.moveTo(x, y - r); g.quadraticCurveTo(x, y, x + r, y); g.quadraticCurveTo(x, y, x, y + r); g.quadraticCurveTo(x, y, x - r, y); g.quadraticCurveTo(x, y, x, y - r); }
     else g.arc(x, y, r, 0, 7);
     g.fill();
   }
-  const kindOf = group => group === 'stations' ? 'diamond' : (group === 'gnss' || group === 'geo') ? 'square' : 'circle';
-  const voiceName = group => group === 'stations' ? 'bell' : (group === 'gnss' || group === 'geo') ? 'low swell' : 'pluck';
+
+  // labels: 14px with a halo, placed so they never overlap each other
+  function label(text, x, y, c, color, bold = true) {
+    g.font = `${bold ? 600 : 400} 14px ${c.font}`; const w = g.measureText(text).width, h = 16;
+    for (const [dx, dy, al] of [[10, 5, 'left'], [-10, 5, 'right'], [0, -12, 'center'], [0, 22, 'center'], [10, -10, 'left'], [-10, -10, 'right']]) {
+      const lx = x + dx, rx = al === 'left' ? lx : al === 'right' ? lx - w : lx - w / 2, rect = [rx, y + dy - 12, w, h];
+      if (rx < 2 || rx + w > W - 2 || y + dy < 12 || y + dy > H - 4) continue;
+      if (placed.some(p => rect[0] < p[0] + p[2] && rect[0] + rect[2] > p[0] && rect[1] < p[1] + p[3] && rect[1] + rect[3] > p[1])) continue;
+      placed.push(rect); g.textAlign = al; g.lineJoin = 'round'; g.lineWidth = 4; g.strokeStyle = alpha(c.bg, .9); g.strokeText(text, lx, y + dy); g.fillStyle = color; g.fillText(text, lx, y + dy); return true;
+    }
+    return false;
+  }
 
   function draw(ms) {
-    raf = requestAnimationFrame(draw);
+    requestAnimationFrame(draw);
     if (W < 2 || !cv.offsetParent) return;
-    const c = C(), t = ms / 1000;
+    const c = C(), lvl = getLevel(); placed.length = 0; marks.length = 0;
     g.clearRect(0, 0, W, H);
     const bgG = g.createRadialGradient(cx, cy, 0, cx, cy, R); bgG.addColorStop(0, c.bg2); bgG.addColorStop(1, c.bg); g.fillStyle = bgG; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill();
-    // Milky Way drone: a breathing glow centred on the galactic centre, strength = how much band is overhead
     if (sky) {
-      const lvl = Math.max(bed.mw, .06), breathe = .75 + .25 * Math.sin(t * .6);
-      const [gx, gy] = pos(sky.gc.az, Math.max(sky.gc.alt, 0)), gr = R * (.35 + .55 * lvl) * breathe;
-      const gg = g.createRadialGradient(gx, gy, 0, gx, gy, gr); gg.addColorStop(0, alpha(c.mw, .55 * Math.min(1, lvl + .25))); gg.addColorStop(1, alpha(c.mw, 0));
+      // Milky Way drone: glow centred on the galactic centre. Strength = how much band is overhead; it pulses with the REAL audio level.
+      const base = Math.max(bed.mw, .06), pulse = calm ? 1 : .8 + Math.min(.6, lvl * 2.2);
+      const [gx, gy] = pos(sky.gc.az, Math.max(sky.gc.alt, 0)), gr = R * (.35 + .55 * base) * pulse;
+      const gg = g.createRadialGradient(gx, gy, 0, gx, gy, gr); gg.addColorStop(0, alpha(c.mw, .55 * Math.min(1, base + .25))); gg.addColorStop(1, alpha(c.mw, 0));
       g.save(); g.beginPath(); g.arc(cx, cy, R, 0, 7); g.clip(); g.fillStyle = gg; g.fillRect(0, 0, W, H); g.restore();
-      if (sky.gc.alt > -3) { g.fillStyle = alpha(c.mw, .9); g.font = `600 11px ${c.font}`; g.textAlign = 'center'; g.fillText('galactic centre', gx, gy + 4); }
+      if (sky.gc.alt > -3) marks.push({ x: gx, y: gy, r: 30, kind: 'gc' });
     }
-    // frame: horizon, height rings, compass
-    g.strokeStyle = c.line; g.lineWidth = 1.5; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.stroke();
-    g.lineWidth = 1; g.setLineDash([3, 5]); for (const a of [30, 60]) { g.beginPath(); g.arc(cx, cy, R * (90 - a) / 90, 0, 7); g.stroke(); } g.setLineDash([]);
-    g.fillStyle = c.muted; g.font = `600 12px ${c.font}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    for (const [l, a] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) { const [x, y] = pos(a, -8); g.fillText(l, x + (a === 90 ? 8 : a === 270 ? -8 : 0), y + (a === 0 ? -8 : a === 180 ? 8 : 0)); }
+    // frame: horizon + height rings as solid recessive hairlines, with small labels
+    g.strokeStyle = c.line; g.lineWidth = 1; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.stroke();
+    for (const a of [30, 60]) { g.beginPath(); g.arc(cx, cy, R * (90 - a) / 90, 0, 7); g.stroke(); }
+    g.fillStyle = alpha(c.muted, .9); g.font = `12px ${c.font}`; g.textAlign = 'center';
+    g.fillText('overhead', cx, cy + 16); g.fillText('60°', cx, cy - R / 3 + 12); g.fillText('30°', cx, cy - R * 2 / 3 + 12); g.fillText('horizon', cx + R * .72, cy + R * .72 + 14);
+    g.fillStyle = c.text; g.font = `600 15px ${c.font}`; g.textBaseline = 'middle';
+    for (const [l, a] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) { const [x, y] = pos(a, -8); g.fillText(l, x + (a === 90 ? 10 : a === 270 ? -10 : 0), y + (a === 0 ? -9 : a === 180 ? 9 : 0)); }
     g.textBaseline = 'alphabetic';
-    if (!sky) { g.fillStyle = c.muted; g.font = `15px ${c.font}`; g.fillText('Tap Listen to see the sound', cx, cy); return; }
-    // bodies
-    for (const b of sky.bodies) {
-      if (b.alt <= 0 || b.id === 'Sun') continue; const [x, y] = pos(b.az, b.alt), moon = b.id === 'Moon', r = moon ? 8 : b.id === 'Jupiter' || b.id === 'Venus' ? 6 : 4;
-      g.fillStyle = alpha(moon ? c.moon : c.planet, .25); g.beginPath(); g.arc(x, y, r + 5 + 1.5 * Math.sin(t * 1.3 + x), 0, 7); g.fill(); shape('circle', x, y, r, moon ? c.moon : c.planet);
-      g.fillStyle = c.text; g.font = `12px ${c.font}`; g.textAlign = 'left'; g.fillText(b.id, x + r + 6, y + 4);
-    }
-    // satellite trails and markers (only the voiced few get a label)
+    if (!sky) { g.fillStyle = c.muted; g.font = `16px ${c.font}`; g.fillText('Press Listen to start', cx, cy - 28); return; }
     const voicedIds = new Set(voiced.map(v => v.id));
-    for (const [id, tr] of trails) {
-      if (tr.length < 2) continue; g.lineWidth = 1.5;
-      for (let i = 1; i < tr.length; i++) { const [x0, y0] = pos(tr[i - 1][0], tr[i - 1][1]), [x1, y1] = pos(tr[i][0], tr[i][1]); g.strokeStyle = alpha(c.sat, .08 + .5 * i / tr.length); g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
+    // silent satellites: tiny, faint specks (kept so you can see how busy the sky is, but never competing)
+    for (const s of sky.sats) { if (s.alt <= 0 || voicedIds.has(s.id)) continue; const [x, y] = pos(s.az, s.alt); g.fillStyle = alpha(c.sat, .28); g.fillRect(x - .8, y - .8, 1.6, 1.6); marks.push({ x, y, r: 12, kind: 'silent', s }); }
+    // planets and Moon: steady discs
+    for (const b of sky.bodies) {
+      if (b.alt <= 0 || b.id === 'Sun') continue; const [x, y] = pos(b.az, b.alt), moon = b.id === 'Moon', r = moon ? 8 : b.id === 'Jupiter' || b.id === 'Venus' ? 6 : 4.5;
+      g.fillStyle = alpha(moon ? c.moon : c.planet, .22); g.beginPath(); g.arc(x, y, r + 5, 0, 7); g.fill(); shape('circle', x, y, r, moon ? c.moon : c.planet);
+      marks.push({ x, y, r: 28, kind: 'body', b }); label(b.id, x, y, c, c.text, false);
     }
-    for (const s of sky.sats) {
-      if (s.alt <= 0) continue; const [x, y] = pos(s.az, s.alt), v = voicedIds.has(s.id);
-      shape(kindOf(s.group), x, y, v ? 5 : 2, alpha(c.sat, v ? 1 : .35));
-      if (v) { const rising = (s.alt - (prevAlt.get(s.id) ?? s.alt)) >= 0; g.fillStyle = rising ? c.up : c.down; g.font = `600 12px ${c.font}`; g.textAlign = 'left'; g.fillText((rising ? '▲ ' : '▼ ') + s.name.split(' ')[0], x + 9, y + 4); }
+    // trails and markers for the sounding satellites only
+    for (const v of voiced) {
+      const tr = trails.get(v.id) || []; g.lineWidth = 2;
+      for (let i = 1; i < tr.length; i++) { const [x0, y0] = pos(tr[i - 1][0], tr[i - 1][1]), [x1, y1] = pos(tr[i][0], tr[i][1]); g.strokeStyle = alpha(c.sat, .1 + .55 * i / tr.length); g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
     }
-    // ripples from sounds
+    for (const v of voiced) {
+      const [x, y] = pos(v.az, v.alt), sh = shapeOf(v.group);
+      g.fillStyle = alpha(c.bg, .85); g.beginPath(); g.arc(x, y, 9, 0, 7); g.fill(); // surface ring so overlapping marks stay separate
+      shape(sh, x, y, v.group === 'stations' ? 7 : 6, c.sat);
+      marks.push({ x, y, r: 28, kind: 'sat', s: v });
+      label(`${v.up ? '▲' : '▼'} ${v.group === 'stations' ? cleanName(v.name) : plainType(v)}`, x, y, c, v.up ? c.up : c.down);
+    }
+    // ripples from sounds (delayed to match the audio the phone is actually playing)
     for (let i = fx.length - 1; i >= 0; i--) {
       const e = fx[i], age = (ms - e.t0) / 1000, life = e.k === 'sweep' ? 1.2 : e.k === 'spark' ? .5 : 1.5;
-      if (age > life) { fx.splice(i, 1); continue; } const k = age / life, [x, y] = pos(e.az, e.alt);
-      if (e.k === 'spark') { shape('spark', x, y, 3 + 5 * (1 - k), alpha(c.star, 1 - k)); continue; }
-      const col = e.k === 'sweep' ? (e.up ? c.up : c.down) : e.k === 'ping' && e.group === 'stations' ? c.accent : c.sat;
-      const r = e.k === 'sweep' ? (e.up ? 6 + 44 * k : 50 - 44 * k) : 8 + (30 + 60 * e.vol) * k; // rising ripples spread out, setting ones fall in
-      g.lineWidth = 2.5 * (1 - k) + .5; g.strokeStyle = alpha(col, (1 - k) * .9); g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
-      if (e.k === 'ping' && k < .25) { g.fillStyle = alpha(col, (1 - k * 4) * .6); g.beginPath(); g.arc(x, y, 9, 0, 7); g.fill(); }
+      if (age > life) { fx.splice(i, 1); continue; }
+      const k = Math.max(0, age) / life, [x, y] = pos(e.az, e.alt);
+      if (e.k === 'spark') { shape('spark', x, y, 3 + (calm ? 0 : 5 * (1 - k)), alpha(c.star, 1 - k)); continue; }
+      const col = e.k === 'sweep' ? (e.up ? c.up : c.down) : e.group === 'stations' ? c.accent : c.sat;
+      const r = calm ? 14 : e.k === 'sweep' ? (e.up ? 6 + 44 * k : 50 - 44 * k) : 10 + (26 + 54 * e.vol) * k; // rising ripples spread out, setting ones fall in
+      g.lineWidth = 2.5 * (1 - k) + .6; g.strokeStyle = alpha(col, (1 - k) * .9); g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
     }
-    // you are here
-    g.fillStyle = c.text; g.beginPath(); g.arc(cx, cy, 2, 0, 7); g.fill();
+    // picked object: bold ring
+    if (picked) { const m = marks.find(m => m.kind === picked.kind && (m.kind === 'gc' || (m.s?.id ?? m.b?.id) === picked.id)); if (m) { g.strokeStyle = c.text; g.lineWidth = 2; g.beginPath(); g.arc(m.x, m.y, 16, 0, 7); g.stroke(); } }
+    g.fillStyle = c.text; g.beginPath(); g.arc(cx, cy, 2.5, 0, 7); g.fill();
   }
+  requestAnimationFrame(draw);
 
-  function legend() {
-    if (!legendEl) return;
-    const rows = [];
-    if (sky) {
-      const mwp = Math.round(bed.mw * 100);
-      rows.push(`<div class="sl-row"><span class="sl-glyph">≋</span><span><b>Drone:</b> the Milky Way band. ${mwp > 5 ? `About ${mwp}% of it is overhead, so the drone is ${mwp > 50 ? 'full and bright' : 'soft'}.` : 'Little of it is overhead, so the drone is quiet.'} The slow change you hear is the chord breathing, not a fault.</span></div>`);
-      const ga = sky.gc.alt; rows.push(`<div class="sl-row"><span class="sl-glyph">◔</span><span><b>Deep swell:</b> the galactic centre, ${ga > 0 ? `${Math.round(ga)}° up in the ${compass(sky.gc.az)}` : 'below the horizon, so silent'}${ga > 0 ? (ga > (bed.prevGc ?? ga) ? ', rising' : ga < (bed.prevGc ?? ga) ? ', sinking' : '') : ''}. It gets louder as it climbs.</span></div>`);
-      for (const v of voiced) rows.push(`<div class="sl-row"><span class="sl-glyph">${v.group === 'stations' ? '◆' : (v.group === 'gnss' || v.group === 'geo') ? '■' : '●'}</span><span><b>${v.name.split(' (')[0]}</b> (${voiceName(v.group)}) ${Math.round(v.alt)}° up in the ${compass(v.az)}, <span class="${v.up ? 'sh-up' : 'sh-dn'}">${v.up ? '▲ rising' : '▼ lowering'}</span></span></div>`);
-      const bodies = sky.bodies.filter(b => b.alt > 0 && b.id !== 'Sun'); if (bodies.length) rows.push(`<div class="sl-row"><span class="sl-glyph">◉</span><span><b>Steady notes:</b> ${bodies.map(b => `${b.id} ${Math.round(b.alt)}° ${compass(b.az)}`).join(', ')}. One note each, louder as they climb.</span></div>`);
-      rows.push(`<div class="sl-row"><span class="sl-glyph">✦</span><span><b>Shimmer:</b> little glints are stars. More glints means a darker sky.</span></div>`);
-    }
-    rows.push('<p class="small muted sl-key">Ripple = a sound just played. ▲ up arrow, cool shift = coming into view. ▼ down arrow, warm shift = leaving view (in red and green modes: bright vs dim). Left and right in the sound match left and right on this map.</p>');
-    legendEl.innerHTML = rows.join('');
+  // ----- tap a dot to ask "what is that?" -----
+  function describe(m) {
+    if (m.kind === 'gc') return `Galactic centre · the middle of our galaxy · ${sky.gc.alt > 0 ? `${Math.round(sky.gc.alt)}° up in the ${compass(sky.gc.az)} · plays as the deep swell` : 'below the horizon, so silent'}`;
+    if (m.kind === 'body') return `${m.b.id} · ${Math.round(m.b.alt)}° up in the ${compass(m.b.az)} · a steady note, louder as it climbs`;
+    const s = m.s, v = voiced.find(x => x.id === s.id);
+    return `${s.group === 'stations' ? cleanName(s.name) : plainType(s)} (${cleanName(s.name)}) · ${Math.round(s.alt)}° up in the ${compass(s.az)} · ${v ? `playing as a ${voiceOf(s.group)}, ${v.up ? 'rising' : 'lowering'}` : 'not playing: too many are up to voice them all'}`;
   }
+  cv.addEventListener('pointerup', e => {
+    if (!sky) return;
+    const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    let best = null, bd = 1e9; for (const m of marks) { const d = Math.hypot(m.x - x, m.y - y); if (d < Math.max(m.r, 24) && d < bd) { bd = d; best = m; } }
+    const id = best && (best.kind === 'gc' ? 'gc' : best.s?.id ?? best.b?.id);
+    if (!best || (picked && picked.kind === best.kind && picked.id === id)) { picked = null; if (els.pick) els.pick.textContent = IDLE; return; }
+    picked = { kind: best.kind, id }; if (els.pick) els.pick.textContent = describe(best);
+  });
+
+  // ----- "Now playing" chips: always say what is sounding, and flash when it does -----
+  function nowRow() {
+    if (!els.now) return;
+    if (!sky) { els.now.innerHTML = ''; return; }
+    const chips = [], mwp = Math.round(bed.mw * 100);
+    chips.push(`<span class="np" data-k="drone"><i>≋</i><b>Drone</b> Milky Way, ${mwp}% overhead</span>`);
+    if (sky.gc.alt > 0) chips.push(`<span class="np" data-k="gc"><i>◔</i><b>Deep swell</b> galactic centre, ${Math.round(sky.gc.alt)}° up</span>`);
+    for (const v of voiced) chips.push(`<span class="np" data-k="s${v.id}"><i>${GLYPH[shapeOf(v.group)]}</i><b>${v.group === 'stations' ? cleanName(v.name) : plainType(v)}</b> ${voiceOf(v.group)} <em class="${v.up ? 'sh-up' : 'sh-dn'}">${v.up ? '▲ rising' : '▼ lowering'}</em></span>`);
+    const bs = sky.bodies.filter(b => b.alt > 0 && b.id !== 'Sun'); if (bs.length) chips.push(`<span class="np" data-k="body"><i>◉</i><b>Steady notes</b> ${bs.map(b => b.id).join(', ')}</span>`);
+    chips.push(`<span class="np" data-k="spark"><i>✦</i><b>Glints</b> stars</span>`);
+    const html = chips.join(''); if (html !== lastNow) { els.now.innerHTML = html; lastNow = html; }
+  }
+  function flash(key) { const el = key && els.now?.querySelector(`[data-k="${key}"]`); if (!el) return; el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 450); }
 
   return {
-    start() { if (!raf) raf = requestAnimationFrame(draw); running = true; },
-    stop() { running = false; sky = null; voiced = []; fx.length = 0; trails.clear(); prevAlt.clear(); legend(); }, // keeps drawing the empty map so it never looks broken
-    event(e) { fx.push({ ...e, t0: performance.now() }); if (fx.length > 60) fx.shift(); },
+    start() { },
+    stop() { sky = null; voiced = []; fx.length = 0; trails.clear(); picked = null; lastNow = ''; getLevel = () => 0; if (els.now) els.now.innerHTML = ''; if (els.pick) els.pick.textContent = IDLE; },
+    event(e, delaySec = 0) { setTimeout(() => { fx.push({ ...e, t0: performance.now() }); if (fx.length > 60) fx.shift(); flash(e.k === 'ping' ? 's' + e.id : e.k === 'spark' ? 'spark' : ''); }, Math.max(0, delaySec) * 1000); },
     update(s, eng) {
-      sky = s; voiced = eng.voiced || []; bed = { ...eng.bed, prevGc: bed.gcAlt };
-      for (const x of s.sats) { if (x.alt <= 0) { trails.delete(x.id); continue; } const tr = trails.get(x.id) || []; tr.push([x.az, x.alt]); if (tr.length > 30) tr.shift(); trails.set(x.id, tr); }
-      legend();
-      for (const x of s.sats) prevAlt.set(x.id, x.alt);
+      sky = s; voiced = eng.voiced || []; bed = { ...eng.bed }; getLevel = eng.level || (() => 0);
+      const ids = new Set(voiced.map(v => v.id));
+      for (const x of s.sats) { if (x.alt <= 0 || !ids.has(x.id)) { trails.delete(x.id); continue; } const tr = trails.get(x.id) || []; tr.push([x.az, x.alt]); if (tr.length > 30) tr.shift(); trails.set(x.id, tr); }
+      nowRow();
     },
   };
 }

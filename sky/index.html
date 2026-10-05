@@ -176,12 +176,27 @@
     <section class="view" id="view-listen">
       <h1>Listen</h1>
       <div class="card sound-card" id="soundCard">
-        <div class="card-h"><h2>Listen to the sky</h2></div>
-        <p class="muted small">Sky Sound turns what is overhead right now into live sound. Watch the map: each ripple is a sound that just played. Left and right follow compass direction, higher pitch means higher in the sky, a rising sweep means something is coming into view and a falling sweep means it is leaving. It is sound made from data, not a recording of space.</p>
+        <p class="muted">Hear what is overhead right now, and watch it play on the map. Headphones sound best.</p>
         <div class="sound-row"><button class="btn" id="soundToggle">Listen to the sky</button></div>
-        <p class="sound-status" id="soundStatus" aria-live="off">Tap to start. Headphones sound best.</p>
-        <canvas id="soundViz" class="sound-viz" aria-label="Live map of the sounds, looking straight up, north at the top"></canvas>
-        <div class="sound-legend" id="soundLegend"></div>
+        <p class="sound-status" id="soundStatus" aria-live="off">Tap to start.</p>
+        <div class="sound-now" id="soundNow" aria-label="What is playing now"></div>
+        <canvas id="soundViz" class="sound-viz" aria-label="Live map of the sounds. Looking straight up: centre is overhead, edge is the horizon, north at the top, east on the right."></canvas>
+        <p class="sound-pick" id="soundPick">Tap a shape on the map to see what it is.</p>
+        <div class="sound-key" aria-label="Key">
+          <span><i>◆</i> station bell</span><span><i>●</i> satellite pluck</span><span><i>■</i> high satellite swell</span><span><i>◉</i> Moon or planet note</span><span><i>✦</i> star glint</span><span><i>◌</i> ripple: just played</span><span class="sh-up">▲ rising</span><span class="sh-dn">▼ lowering</span>
+        </div>
+        <details class="sound-how"><summary>How to read this</summary>
+          <ul>
+            <li>The map looks straight up. The centre is overhead. The edge is the horizon.</li>
+            <li>Left and right on the map match left and right in your ears.</li>
+            <li>A higher note means higher in the sky.</li>
+            <li>A ripple means a sound just played.</li>
+            <li>▲ rising means coming into view. ▼ lowering means leaving.</li>
+            <li>The slow drone is the Milky Way band. Its swelling is normal.</li>
+            <li>Only a few satellites play at once. The faint specks are the silent ones.</li>
+            <li>This is sound made from data, not a recording of space.</li>
+          </ul>
+        </details>
         <div class="sound-layers" id="soundLayers">
           <label><input type="checkbox" data-sl="sats"> Satellites</label>
           <label><input type="checkbox" data-sl="planets"> Moon and planets</label>

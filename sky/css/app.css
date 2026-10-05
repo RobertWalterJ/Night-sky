@@ -445,3 +445,18 @@ html, body { overflow-x: hidden; }
 .menu-item i { font-style: normal; font-size: 1.4rem; min-width: 1.6rem; text-align: center; color: var(--accent); }
 .menu-item span { display: flex; flex-direction: column; gap: 1px; }
 .menu-item b { font-weight: 600; font-size: 1.02rem; } .menu-item small { color: var(--muted); font-size: .85rem; }
+
+/* Sky Sound: now playing, pick line, key */
+.sound-now { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
+.np { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; min-height: 40px; border: 1px solid var(--line); border-radius: 999px; font-size: .95rem; background: var(--surface-2); transition: background .15s, border-color .15s; }
+.np i { font-style: normal; color: var(--accent); } .np b { font-weight: 600; } .np em { font-style: normal; font-weight: 600; }
+.np.hit { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); } .np.hit i { color: var(--accent-ink); }
+.sound-pick { min-height: 3em; margin: 6px 0 10px; font-size: 1rem; line-height: 1.4; }
+.sound-key { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .9rem; color: var(--muted); margin-bottom: 8px; }
+.sound-key i { font-style: normal; color: var(--accent); }
+.sound-key .sh-up, .np .sh-up { color: #6fb0ff; } .sound-key .sh-dn, .np .sh-dn { color: #ff7a55; }
+[data-theme="stargazer"] .sound-key .sh-up, [data-theme="terminal"] .sound-key .sh-up, [data-theme="stargazer"] .np .sh-up, [data-theme="terminal"] .np .sh-up { color: var(--accent); }
+[data-theme="stargazer"] .sound-key .sh-dn, [data-theme="terminal"] .sound-key .sh-dn, [data-theme="stargazer"] .np .sh-dn, [data-theme="terminal"] .np .sh-dn { color: var(--muted); }
+.np.hit .sh-up, .np.hit .sh-dn { color: var(--accent-ink) !important; }
+.sound-how { margin: 4px 0 12px; } .sound-how summary { cursor: pointer; padding: 10px 0; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.sound-how ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.4; }
