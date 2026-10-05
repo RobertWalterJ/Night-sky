@@ -23,9 +23,9 @@ const BODY = {
 };
 // How each satellite group sounds. family: bell | pluck | hum. [base midi note, seconds between pings, level]
 const GROUP = {
-  stations: ['bell', 74, 2.4, .20], visual: ['pluck', 62, 3.2, .10], gnss: ['hum', 38, 5.5, .10], geo: ['hum', 26, 7, .08],
-  weather: ['pluck', 66, 3.8, .07], resource: ['pluck', 59, 3.8, .07], science: ['pluck', 69, 4.2, .07],
-  amateur: ['pluck', 64, 4.5, .06], cubesat: ['pluck', 71, 4.5, .05], oneweb: ['pluck', 73, 5, .05], starlink: ['pluck', 76, 5, .04],
+  stations: ['bell', 74, 2.4, .36], visual: ['pluck', 62, 3.2, .20], gnss: ['hum', 38, 5.5, .18], geo: ['hum', 26, 7, .14],
+  weather: ['pluck', 66, 3.8, .14], resource: ['pluck', 59, 3.8, .14], science: ['pluck', 69, 4.2, .14],
+  amateur: ['pluck', 64, 4.5, .11], cubesat: ['pluck', 71, 4.5, .10], oneweb: ['pluck', 73, 5, .09], starlink: ['pluck', 76, 5, .08],
 };
 const PRIORITY = { stations: 0, visual: 1, science: 2, weather: 3, resource: 3, gnss: 4, geo: 5 };
 
@@ -39,7 +39,7 @@ export function createEngine(ctx, o = {}) {
   const layers = { sats: true, planets: true, mw: true, stars: true, ...(o.layers || {}) };
   let threeD = !!o.threeD;
   const out = o.output || ctx.destination;
-  const master = ctx.createGain(); master.gain.value = o.volume ?? .6;
+  const master = ctx.createGain(); master.gain.value = o.volume ?? .5;
   const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.knee.value = 18; comp.ratio.value = 4; comp.attack.value = .01; comp.release.value = .25;
   master.connect(comp); comp.connect(out);
   const dry = ctx.createGain(); dry.connect(master);
@@ -142,17 +142,17 @@ export function createEngine(ctx, o = {}) {
       const dark = sky.dark;
       // Milky Way bed: richer and brighter the more of the band is overhead
       const mwF = layers.mw ? sky.mw * dark : 0;
-      padGain.gain.setTargetAtTime(layers.mw ? (.05 + .11 * mwF) * (.4 + .6 * dark) : 0, at, 2.5);
+      padGain.gain.setTargetAtTime(layers.mw ? (.025 + .05 * mwF) * (.4 + .6 * dark) : 0, at, 2.5);
       padLP.frequency.setTargetAtTime(280 + 1200 * mwF, at, 2.5);
       // galactic centre: a deep warm swell that moves as it climbs and sinks
       const gcAlt = sky.gc.alt, gcOn = layers.mw && dark > .05;
-      gcGain.gain.setTargetAtTime(gcOn ? smooth(gcAlt / 35) * .30 * dark : 0, at, 1.5); gcPan.set(sky.gc.az, Math.max(gcAlt, 0), at);
+      gcGain.gain.setTargetAtTime(gcOn ? smooth(gcAlt / 35) * .15 * dark : 0, at, 1.5); gcPan.set(sky.gc.az, Math.max(gcAlt, 0), at);
       if (lastGc != null && gcOn) { if (lastGc <= 0 && gcAlt > 0) sweep(at, 98, true, .10, sky.gc.az, 5); if (lastGc > 0 && gcAlt <= 0) sweep(at, 98, false, .10, sky.gc.az, 5); }
       lastGc = gcAlt;
       // planets and Moon: steady notes that fade in as they climb
       for (const b of sky.bodies) {
         if (!BODY[b.id]) continue; const v = bodyVoice(b.id), up = layers.planets && b.alt > 0;
-        v.g.gain.setTargetAtTime(up ? smooth(b.alt / 30) * v.lvl : 0, at, 1.2); v.pn.set(b.az, Math.max(b.alt, 0), at);
+        v.g.gain.setTargetAtTime(up ? smooth(b.alt / 30) * v.lvl * .45 : 0, at, 1.2); v.pn.set(b.az, Math.max(b.alt, 0), at);
         if (layers.planets && v.prev != null) {
           const hz = midiHz(BODY[b.id][0]);
           if (v.prev <= 0 && b.alt > 0) sweep(at, hz, true, .09, b.az, 2); else if (v.prev > 0 && b.alt <= 0) sweep(at, hz, false, .09, b.az, 2);
@@ -177,7 +177,7 @@ export function createEngine(ctx, o = {}) {
       if (layers.stars && dark > .05) {
         starAcc += clamp(sky.stars / 2200, 0, 1) * 2.4 * dark;
         let n = Math.floor(starAcc); starAcc -= n;
-        for (; n > 0; n--) { const deg = 14 + Math.floor(Math.random() * 8), az = Math.random() * 360, alt = 15 + Math.random() * 70; sparkle(at + Math.random() * .95, midiHz(degMidi(deg, 62)), az, alt, .018 + Math.random() * .02); }
+        for (; n > 0; n--) { const deg = 14 + Math.floor(Math.random() * 8), az = Math.random() * 360, alt = 15 + Math.random() * 70; sparkle(at + Math.random() * .95, midiHz(degMidi(deg, 62)), az, alt, .06 + Math.random() * .05); }
       }
     },
     summary(sky) {
@@ -224,7 +224,7 @@ export async function startSound() {
     audioEl.srcObject = md.stream; await audioEl.play(); output = md;
     if (navigator.mediaSession) { navigator.mediaSession.metadata = new MediaMetadata({ title: 'Sky Sound', artist: 'Night Sky', album: 'Live from overhead' }); navigator.mediaSession.setActionHandler('pause', stopSound); navigator.mediaSession.setActionHandler('stop', stopSound); }
   } catch { output = ctx.destination; }
-  eng = createEngine(ctx, { layers: layerStore(), volume: +store.get('soundVol', .6), threeD: !!store.get('sound3d', false), output });
+  eng = createEngine(ctx, { layers: layerStore(), volume: +store.get('soundVol', .5), threeD: !!store.get('sound3d', false), output });
   const tick = () => { if (!eng) return; const sky = readSky(now()); eng.step(ctx.currentTime, sky); const s = $('#soundStatus'); if (s) s.textContent = eng.summary(sky); };
   tick(); timer = setInterval(tick, 1000); paint();
 }
@@ -241,7 +241,7 @@ function paint() {
 export function initSound() {
   const L = layerStore();
   $$('#soundLayers input[data-sl]').forEach(i => { i.checked = !!L[i.dataset.sl]; i.onchange = () => { L[i.dataset.sl] = i.checked; store.set('soundLayers', L); eng?.setLayer(i.dataset.sl, i.checked); }; });
-  const vol = $('#soundVol'); if (vol) { vol.value = store.get('soundVol', .6); vol.oninput = () => { store.set('soundVol', +vol.value); eng?.setVolume(+vol.value); }; }
+  const vol = $('#soundVol'); if (vol) { vol.value = store.get('soundVol', .5); vol.oninput = () => { store.set('soundVol', +vol.value); eng?.setVolume(+vol.value); }; }
   const d3 = $('#sound3d'); if (d3) { d3.checked = !!store.get('sound3d', false); d3.onchange = () => { store.set('sound3d', d3.checked); toast(isPlaying() ? 'Headphone 3D applies the next time you start listening' : 'Headphone 3D on'); }; }
   const toggle = () => isPlaying() ? stopSound() : startSound();
   if ($('#soundToggle')) $('#soundToggle').onclick = toggle;
