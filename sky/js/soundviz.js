@@ -30,6 +30,7 @@ export function createViz(cv, els = {}) {
   const g = cv.getContext('2d');
   let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, R = 0;
   const fx = [], trails = new Map(), marks = [], placed = [];
+  const idKey = new Map();
   let sky = null, voiced = [], bed = { mw: 0, gcAlt: -90 }, getLevel = () => 0, picked = null, lastNow = '';
   const IDLE = 'Tap a shape on the map to see what it is.';
 
@@ -148,10 +149,13 @@ export function createViz(cv, els = {}) {
     if (!els.now) return;
     if (!sky) { els.now.innerHTML = ''; return; }
     const chips = [], mwp = Math.round(bed.mw * 100);
-    chips.push(`<span class="np" data-k="drone"><i>≋</i><b>Drone</b> Milky Way, ${mwp}% overhead</span>`);
-    if (sky.gc.alt > 0) chips.push(`<span class="np" data-k="gc"><i>◔</i><b>Deep swell</b> galactic centre, ${Math.round(sky.gc.alt)}° up</span>`);
-    for (const v of voiced) chips.push(`<span class="np" data-k="s${v.id}"><i>${GLYPH[shapeOf(v.group)]}</i><b>${v.group === 'stations' ? cleanName(v.name) : plainType(v)}</b> ${voiceOf(v.group)} <em class="${v.up ? 'sh-up' : 'sh-dn'}">${v.up ? '▲ rising' : '▼ lowering'}</em></span>`);
-    const bs = sky.bodies.filter(b => b.alt > 0 && b.id !== 'Sun'); if (bs.length) chips.push(`<span class="np" data-k="body"><i>◉</i><b>Steady notes</b> ${bs.map(b => b.id).join(', ')}</span>`);
+    chips.push(`<span class="np" data-k="drone"><i>≋</i><b>Drone</b> Milky Way ${mwp}%</span>`);
+    if (sky.gc.alt > 0) chips.push(`<span class="np" data-k="gc"><i>◔</i><b>Deep swell</b> galactic centre ${Math.round(sky.gc.alt)}°</span>`);
+    // group repeated types so the row stays short: "Rocket stage x4 ... 3 rising, 1 lowering"
+    const groups = new Map(); idKey.clear();
+    for (const v of voiced) { const key = v.group === 'stations' ? cleanName(v.name) : plainType(v); idKey.set(v.id, key); const gp = groups.get(key) || { n: 0, up: 0, dn: 0, shape: shapeOf(v.group), voice: voiceOf(v.group) }; gp.n++; v.up ? gp.up++ : gp.dn++; groups.set(key, gp); }
+    for (const [key, gp] of groups) chips.push(`<span class="np" data-k="g:${key}"><i>${GLYPH[gp.shape]}</i><b>${key}${gp.n > 1 ? ' ×' + gp.n : ''}</b> ${gp.voice} ${gp.up ? `<em class="sh-up">▲${gp.up}</em>` : ''} ${gp.dn ? `<em class="sh-dn">▼${gp.dn}</em>` : ''}</span>`);
+    const bs = sky.bodies.filter(b => b.alt > 0 && b.id !== 'Sun'); if (bs.length) chips.push(`<span class="np" data-k="body"><i>◉</i><b>Notes</b> ${bs.map(b => b.id).join(', ')}</span>`);
     chips.push(`<span class="np" data-k="spark"><i>✦</i><b>Glints</b> stars</span>`);
     const html = chips.join(''); if (html !== lastNow) { els.now.innerHTML = html; lastNow = html; }
   }
@@ -160,7 +164,7 @@ export function createViz(cv, els = {}) {
   return {
     start() { },
     stop() { sky = null; voiced = []; fx.length = 0; trails.clear(); picked = null; lastNow = ''; getLevel = () => 0; if (els.now) els.now.innerHTML = ''; if (els.pick) els.pick.textContent = IDLE; },
-    event(e, delaySec = 0) { setTimeout(() => { fx.push({ ...e, t0: performance.now() }); if (fx.length > 60) fx.shift(); flash(e.k === 'ping' ? 's' + e.id : e.k === 'spark' ? 'spark' : ''); }, Math.max(0, delaySec) * 1000); },
+    event(e, delaySec = 0) { setTimeout(() => { fx.push({ ...e, t0: performance.now() }); if (fx.length > 60) fx.shift(); flash(e.k === 'ping' ? 'g:' + idKey.get(e.id) : e.k === 'spark' ? 'spark' : ''); }, Math.max(0, delaySec) * 1000); },
     update(s, eng) {
       sky = s; voiced = eng.voiced || []; bed = { ...eng.bed }; getLevel = eng.level || (() => 0);
       const ids = new Set(voiced.map(v => v.id));

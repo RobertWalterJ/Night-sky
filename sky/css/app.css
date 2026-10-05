@@ -460,3 +460,6 @@ html, body { overflow-x: hidden; }
 .np.hit .sh-up, .np.hit .sh-dn { color: var(--accent-ink) !important; }
 .sound-how { margin: 4px 0 12px; } .sound-how summary { cursor: pointer; padding: 10px 0; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
 .sound-how ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.4; }
+
+.np { padding: 6px 11px; min-height: 36px; font-size: .9rem; gap: 5px; }
+.sound-now { gap: 6px; }

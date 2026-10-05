@@ -191,11 +191,9 @@ export function createEngine(ctx, o = {}) {
       }
     },
     summary(sky) {
-      const bits = [], st = sky.sats.filter(s => s.group === 'stations' && s.alt > 0)[0];
-      if (st) bits.push(`${st.name} in the ${compass(st.az)}, ${Math.round(st.alt)}° up`);
-      const n = sky.sats.filter(s => s.alt > 0).length; if (n && layers.sats) bits.push(`${Math.min(api.voiced.length, n)} of ${n} satellites playing`);
-      const pl = sky.bodies.filter(b => b.alt > 0 && b.id !== 'Sun').map(b => b.id); if (pl.length && layers.planets) bits.push(pl.slice(0, 4).join(', ') + ' up');
-      if (layers.mw && sky.mw * sky.dark > .25) bits.push('Milky Way overhead'); else if (layers.mw && sky.gc.alt > 5 && sky.dark > .3) bits.push(`Galactic centre rising in the ${compass(sky.gc.az)}`);
+      const n = sky.sats.filter(s => s.alt > 0).length, bits = [];
+      if (layers.sats && n) bits.push(`${Math.min(api.voiced.length, n)} of ${n} satellites playing`);
+      if (layers.mw && sky.mw * sky.dark > .25) bits.push('Milky Way overhead');
       return bits.length ? bits.join(' · ') : 'Quiet sky right now';
     },
     stop() { try { ctx.close(); } catch { } },
