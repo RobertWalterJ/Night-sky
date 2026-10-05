@@ -417,12 +417,13 @@ html, body { overflow-x: hidden; }
 
 .sound-viz { width: 100%; max-width: 440px; aspect-ratio: 1 / 1; display: block; margin: 6px auto 10px; border-radius: 16px; background: var(--surface-2); }
 .sound-legend { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-.sound-legend .lg { display: flex; gap: 10px; font-size: .98rem; line-height: 1.4; }
-.sound-legend .gl { min-width: 1.4em; text-align: center; color: var(--accent); }
+.sound-legend .sl-row { display: flex; gap: 10px; font-size: .98rem; line-height: 1.4; }
+.sound-legend .sl-row > span:last-child { flex: 1; min-width: 0; }
+.sound-legend .sl-glyph { flex: none; min-width: 1.4em; text-align: center; color: var(--accent); }
 .sound-legend .sh-up { color: #6fb0ff; font-weight: 600; } .sound-legend .sh-dn { color: #ff7a55; font-weight: 600; }
 [data-theme="stargazer"] .sound-legend .sh-up, [data-theme="terminal"] .sound-legend .sh-up { color: var(--accent); }
 [data-theme="stargazer"] .sound-legend .sh-dn, [data-theme="terminal"] .sound-legend .sh-dn { color: var(--muted); }
-.sound-legend .lg-key { margin: 4px 0 0; }
+.sound-legend .sl-key { margin: 4px 0 0; }
 
 /* What am I pointing at */
 .aim-hud { position: absolute; left: 50%; top: 116px; transform: translateX(-50%); margin: 0; padding: 10px 16px; display: flex; flex-direction: column; align-items: center; gap: 2px; max-width: min(92%, 440px); text-align: center; cursor: pointer; color: var(--text); z-index: 5; }

@@ -95,13 +95,13 @@ export function createViz(cv, legendEl) {
     const rows = [];
     if (sky) {
       const mwp = Math.round(bed.mw * 100);
-      rows.push(`<div class="lg"><span class="gl">≋</span><span><b>Drone:</b> the Milky Way band. ${mwp > 5 ? `About ${mwp}% of it is overhead, so the drone is ${mwp > 50 ? 'full and bright' : 'soft'}.` : 'Little of it is overhead, so the drone is quiet.'} The slow change you hear is the chord breathing, not a fault.</span></div>`);
-      const ga = sky.gc.alt; rows.push(`<div class="lg"><span class="gl">◔</span><span><b>Deep swell:</b> the galactic centre, ${ga > 0 ? `${Math.round(ga)}° up in the ${compass(sky.gc.az)}` : 'below the horizon, so silent'}${ga > 0 ? (ga > (bed.prevGc ?? ga) ? ', rising' : ga < (bed.prevGc ?? ga) ? ', sinking' : '') : ''}. It gets louder as it climbs.</span></div>`);
-      for (const v of voiced) rows.push(`<div class="lg"><span class="gl">${v.group === 'stations' ? '◆' : (v.group === 'gnss' || v.group === 'geo') ? '■' : '●'}</span><span><b>${v.name.split(' (')[0]}</b> (${voiceName(v.group)}) ${Math.round(v.alt)}° up in the ${compass(v.az)}, <span class="${v.up ? 'sh-up' : 'sh-dn'}">${v.up ? '▲ rising' : '▼ lowering'}</span></span></div>`);
-      const bodies = sky.bodies.filter(b => b.alt > 0 && b.id !== 'Sun'); if (bodies.length) rows.push(`<div class="lg"><span class="gl">◉</span><span><b>Steady notes:</b> ${bodies.map(b => `${b.id} ${Math.round(b.alt)}° ${compass(b.az)}`).join(', ')}. One note each, louder as they climb.</span></div>`);
-      rows.push(`<div class="lg"><span class="gl">✦</span><span><b>Shimmer:</b> little glints are stars. More glints means a darker sky.</span></div>`);
+      rows.push(`<div class="sl-row"><span class="sl-glyph">≋</span><span><b>Drone:</b> the Milky Way band. ${mwp > 5 ? `About ${mwp}% of it is overhead, so the drone is ${mwp > 50 ? 'full and bright' : 'soft'}.` : 'Little of it is overhead, so the drone is quiet.'} The slow change you hear is the chord breathing, not a fault.</span></div>`);
+      const ga = sky.gc.alt; rows.push(`<div class="sl-row"><span class="sl-glyph">◔</span><span><b>Deep swell:</b> the galactic centre, ${ga > 0 ? `${Math.round(ga)}° up in the ${compass(sky.gc.az)}` : 'below the horizon, so silent'}${ga > 0 ? (ga > (bed.prevGc ?? ga) ? ', rising' : ga < (bed.prevGc ?? ga) ? ', sinking' : '') : ''}. It gets louder as it climbs.</span></div>`);
+      for (const v of voiced) rows.push(`<div class="sl-row"><span class="sl-glyph">${v.group === 'stations' ? '◆' : (v.group === 'gnss' || v.group === 'geo') ? '■' : '●'}</span><span><b>${v.name.split(' (')[0]}</b> (${voiceName(v.group)}) ${Math.round(v.alt)}° up in the ${compass(v.az)}, <span class="${v.up ? 'sh-up' : 'sh-dn'}">${v.up ? '▲ rising' : '▼ lowering'}</span></span></div>`);
+      const bodies = sky.bodies.filter(b => b.alt > 0 && b.id !== 'Sun'); if (bodies.length) rows.push(`<div class="sl-row"><span class="sl-glyph">◉</span><span><b>Steady notes:</b> ${bodies.map(b => `${b.id} ${Math.round(b.alt)}° ${compass(b.az)}`).join(', ')}. One note each, louder as they climb.</span></div>`);
+      rows.push(`<div class="sl-row"><span class="sl-glyph">✦</span><span><b>Shimmer:</b> little glints are stars. More glints means a darker sky.</span></div>`);
     }
-    rows.push('<p class="small muted lg-key">Ripple = a sound just played. ▲ up arrow, cool shift = coming into view. ▼ down arrow, warm shift = leaving view (in red and green modes: bright vs dim). Left and right in the sound match left and right on this map.</p>');
+    rows.push('<p class="small muted sl-key">Ripple = a sound just played. ▲ up arrow, cool shift = coming into view. ▼ down arrow, warm shift = leaving view (in red and green modes: bright vs dim). Left and right in the sound match left and right on this map.</p>');
     legendEl.innerHTML = rows.join('');
   }
 
