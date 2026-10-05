@@ -349,6 +349,7 @@ export function createSky(cv, cfg = {}) {
     }
 
     drawSelected(col, font, t);
+    updateFind(t);
     if (anyG) ctx.drawImage(off.gnd, 0, 0, W, H);
     if (!dome && L.ground) drawHorizon(col, font);
     if (showBelow && L.isochrones) drawIsochroneLabels(col, font);
@@ -462,6 +463,35 @@ export function createSky(cv, cfg = {}) {
     if (o.ra != null && o.dec != null && o.kind === 'point') return toEnu(...radecVec(o.ra, o.dec));
     return o.v;
   }
+  // Point-and-find: plain-words guidance to the selected object while the phone is pointed at the sky.
+  // One fist at arm's length is about 10 degrees.
+  let foundNow = false;
+  const fists = d => { const n = Math.max(1, Math.round(d / 10)); return `${Math.round(d)}° (about ${n} fist${n > 1 ? 's' : ''})`; };
+  function updateFind(t) {
+    const el = cfg.find; if (!el) return;
+    const v = selected && !mini && !dome ? selectedVec(t) : null;
+    if (!v) { if (!el.hidden) el.hidden = true; foundNow = false; return; }
+    el.hidden = false;
+    const q = s => el.querySelector(s), fd = q('.fd'), fa = q('.fa'), fb = q('.fb');
+    q('.fn').textContent = selected.name || 'Target';
+    if (!V.sensor) { fd.textContent = 'Turn on Point and hold your phone up to the sky.'; fa.textContent = '⌖'; fa.style.transform = ''; fb.hidden = false; el.classList.remove('found'); foundNow = false; return; }
+    fb.hidden = true;
+    const x = dot(v, B.r), y = dot(v, B.u), z = dot(v, B.f);
+    const turn = Math.atan2(x, z) * R2D, tilt = Math.atan2(y, Math.hypot(x, z)) * R2D, ang = Math.acos(clamp(z, -1, 1)) * R2D;
+    const below = altAzFromEnu(v).alt < -1;
+    if (ang < 4) {
+      fd.textContent = 'Found it. Hold still and look.'; fa.textContent = '✓'; fa.style.transform = ''; el.classList.add('found');
+      if (!foundNow) { foundNow = true; try { navigator.vibrate?.(60); } catch { } }
+    } else {
+      if (ang > 8) { foundNow = false; el.classList.remove('found'); }
+      const parts = [];
+      if (Math.abs(turn) >= 3) parts.push(`Turn ${turn > 0 ? 'right' : 'left'} ${fists(Math.abs(turn))}`);
+      if (Math.abs(tilt) >= 3) parts.push(`${parts.length ? 'tilt' : 'Tilt'} ${tilt > 0 ? 'up' : 'down'} ${fists(Math.abs(tilt))}`);
+      fd.textContent = parts.join(', ') + (below ? '. It is below the horizon right now.' : '');
+      fa.textContent = '➤'; fa.style.transform = `rotate(${-Math.atan2(y, x) * R2D}deg)`;
+      if (ang >= 4 && ang <= 8 && foundNow) el.classList.add('found'); else if (ang > 8) el.classList.remove('found');
+    }
+  }
   function drawSelected(col, font, t) {
     if (mini) return;
     const v = selectedVec(t); if (!v) return;
@@ -475,9 +505,9 @@ export function createSky(cv, cfg = {}) {
     if (dome) return;
     const dx = dot(v, B.r), dy = -dot(v, B.u), a = Math.atan2(dy, dx);
     const ex = cx + Math.cos(a) * (Math.min(W, H) / 2 - 50), ey = cy + Math.sin(a) * (Math.min(W, H) / 2 - 50);
-    ctx.save(); ctx.translate(ex, ey); ctx.rotate(a); ctx.fillStyle = col.sel;
+    ctx.save(); ctx.translate(ex, ey); ctx.rotate(a); ctx.scale(1.7, 1.7); ctx.fillStyle = col.sel;
     ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(-8, -11); ctx.lineTo(-3, 0); ctx.lineTo(-8, 11); ctx.fill(); ctx.restore();
-    ctx.font = font(12, 600); ctx.textAlign = 'center'; ctx.fillText(selected.name, ex, ey + 28);
+    ctx.font = font(16, 600); ctx.textAlign = 'center'; ctx.fillText(selected.name, ex, ey + 40);
   }
 
   // ---------- loop + interaction ----------
@@ -579,11 +609,13 @@ export function createSky(cv, cfg = {}) {
 export let sky = null;
 export function initSky() {
   loadMilkyWay().then(() => sky?.invalidate());
-  sky = createSky(document.getElementById('skyCanvas'), { ar: document.getElementById('arCanvas'), video: document.getElementById('camVideo'), hud: { dir: document.getElementById('hudDir'), time: document.getElementById('hudTime') } });
+  sky = createSky(document.getElementById('skyCanvas'), { find: document.getElementById('findHud'), ar: document.getElementById('arCanvas'), video: document.getElementById('camVideo'), hud: { dir: document.getElementById('hudDir'), time: document.getElementById('hudTime') } });
   const $ = id => document.getElementById(id);
   $('btnSensor').onclick = async () => { await sky.toggleSensor(); $('btnSensor').classList.toggle('on', sky.V.sensor); };
   $('btnCamera').onclick = async () => { await sky.toggleCamera(); $('skyWrap').classList.toggle('cam', sky.V.camera); $('btnCamera').classList.toggle('on', sky.V.camera); $('btnSensor').classList.toggle('on', sky.V.sensor); };
   $('btnAlign').onclick = () => { const r = sky.align(); $('btnAlign').classList.toggle('on', r === 'armed'); };
+  $('findHud').querySelector('.fb').onclick = async () => { await sky.toggleSensor(true); $('btnSensor').classList.toggle('on', sky.V.sensor); };
+  $('findStop').onclick = () => sky.select(null);
   const lp = $('layersPanel');
   $('btnLayers').onclick = () => { lp.hidden = !lp.hidden; $('btnLayers').classList.toggle('on', !lp.hidden); };
   lp.querySelectorAll('input[data-layer]').forEach(i => {
