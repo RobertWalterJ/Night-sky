@@ -5,7 +5,9 @@ const BASE = 'https://raw.githubusercontent.com/RobertWalterJ/Night-sky/data/';
 const MAX_AGE = 12 * 3600e3;
 let manP = null;
 
-export const manifest = () => (manP ||= fetch(BASE + 'manifest.json', { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null));
+// every request has a timeout: if the snapshot host is slow or blocked, give up quickly and use the live source instead
+const get = (url, ms, opts = {}) => fetch(url, { ...opts, signal: AbortSignal.timeout(ms) });
+export const manifest = () => (manP ||= get(BASE + 'manifest.json', 4000, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null));
 
 async function entry(file, maxAge) {
   const m = await manifest(), f = m?.files?.[file];
@@ -14,7 +16,7 @@ async function entry(file, maxAge) {
 }
 // the snapshot's own timestamp goes in the URL, so each new snapshot is fetched fresh and an old one can be cached
 export async function snapshotText(file, maxAge = MAX_AGE) {
-  try { const f = await entry(file, maxAge); if (!f) return null; const r = await fetch(`${BASE}${file}?v=${encodeURIComponent(f.fetchedAt)}`); return r.ok ? await r.text() : null; } catch { return null; }
+  try { const f = await entry(file, maxAge); if (!f) return null; const r = await get(`${BASE}${file}?v=${encodeURIComponent(f.fetchedAt)}`, file.includes('starlink') ? 25000 : 10000); return r.ok ? await r.text() : null; } catch { return null; }
 }
 export async function snapshotJSON(file, maxAge = MAX_AGE) {
   const t = await snapshotText(file, maxAge); if (!t) return null; try { return JSON.parse(t); } catch { return null; }

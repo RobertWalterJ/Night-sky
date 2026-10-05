@@ -133,15 +133,24 @@ function placeMe() {
 
 async function rebuild() {
   const want = GROUPS.filter(g => groupOn[g[0]]);
-  $('#globeCount').textContent = 'Loading orbits…';
-  for (const g of want) { try { await loadGroup(g[0]); } catch { toast(`Could not load ${g[1]}`); } }
+  const heavy = want.filter(g => g[0] === 'starlink' || g[0] === 'oneweb'), core = want.filter(g => !heavy.includes(g));
+  const el = $('#globeCount'), total = want.length; let done = 0;
+  // load groups side by side with a visible count; the big constellations come last so everything else shows first
+  const load = async g => { try { await loadGroup(g[0]); } catch { toast(`Could not load ${g[1]}`); } done++; el.textContent = `Loading orbits… ${done} of ${total}`; };
+  el.textContent = `Loading orbits… 0 of ${total}`;
+  await Promise.all(core.map(load));
+  build(core);
+  if (heavy.length) { await Promise.all(heavy.map(load)); build(want); }
+}
+function build(groups) {
   const seen = new Set(); list = [];
-  for (const g of want) for (const s of sats.byGroup[g[0]] || []) if (!seen.has(s.norad)) { seen.add(s.norad); list.push({ s, color: new THREE.Color(g[2]), p: new THREE.Vector3(9e9, 0, 0), up: false, rising: false, lit: true }); }
+  for (const g of groups) for (const s of sats.byGroup[g[0]] || []) if (!seen.has(s.norad)) { seen.add(s.norad); list.push({ s, color: new THREE.Color(g[2]), p: new THREE.Vector3(9e9, 0, 0), up: false, rising: false, lit: true }); }
   const n = list.length;
   ptsGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
   ptsGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
   hiGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(Math.max(1, n) * 3), 3)); hiGeo.setDrawRange(0, 0);
-  cursor = 0; for (let i = 0; i < n; i++) update(i, now());
+  const t = now(), sunD = sunScene(t), o = obsVec(), on_ = o.clone().normalize(); // computed once, not once per satellite
+  cursor = 0; for (let i = 0; i < n; i++) update(i, t, sunD, o, on_);
   pts.geometry.computeBoundingSphere();
 }
 

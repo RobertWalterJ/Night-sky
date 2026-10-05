@@ -36,7 +36,7 @@ export async function cachedJSON(url, ttlMin = 30, opts = {}) {
   if (hit && Date.now() - hit.t < ttlMin * 60000) return hit.d;
   try {
     let r;
-    for (let i = 0; i < 2; i++) { try { r = await fetch(url, opts); if (r.ok || r.status < 500) break; } catch (e) { if (i) throw e; } await new Promise(z => setTimeout(z, 1500)); }
+    for (let i = 0; i < 2; i++) { try { r = await fetch(url, { signal: AbortSignal.timeout(25000), ...opts }); if (r.ok || r.status < 500) break; } catch (e) { if (i) throw e; } await new Promise(z => setTimeout(z, 1500)); }
     if (!r.ok) throw new Error(r.status);
     const d = opts.text ? await r.text() : await r.json();
     store.set(key, { t: Date.now(), d });
