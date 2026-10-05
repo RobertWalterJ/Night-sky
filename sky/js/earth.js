@@ -17,7 +17,7 @@ const GROUPS = [
 ];
 const groupOn = store.get('globeGroups', Object.fromEntries(GROUPS.map(g => [g[0], g[3] || (g[0] === 'starlink' && matchMedia('(min-width: 1000px)').matches)])));
 
-let renderer, scene, camera, controls, earth, clouds, atmo, stars, pts, ptsGeo, hiPts, hiGeo, sel = null, selModel = null, orbitLine = null, trackLine = null, me = null, ring = null;
+let renderer, scene, camera, controls, earth, clouds, atmo, stars, pts, ptsGeo, hiPts, hiGeo, selPt, selGeo, follow = false, sel = null, selModel = null, orbitLine = null, trackLine = null, me = null, ring = null;
 let list = [], cursor = 0, active = false, mode = 'globe', speed = 1, lastT = 0, lastEmit = 0, labels = {}, raycaster = new THREE.Raycaster();
 const up = new THREE.Vector3(0, 1, 0);
 
@@ -93,6 +93,13 @@ export function initEarth() {
   hiGeo = new THREE.BufferGeometry();
   hiPts = new THREE.Points(hiGeo, new THREE.PointsMaterial({ size: 13, sizeAttenuation: false, color: 0xffe066, map: dot, transparent: true, opacity: .55, depthWrite: false }));
   hiPts.frustumCulled = false; scene.add(hiPts);
+  // selection ring: a bright open ring around the chosen satellite, always on top
+  const rc = document.createElement('canvas'); rc.width = rc.height = 64; const rx = rc.getContext('2d');
+  rx.lineWidth = 6; rx.strokeStyle = 'rgba(0,0,0,.85)'; rx.beginPath(); rx.arc(32, 32, 24, 0, 7); rx.stroke();
+  rx.lineWidth = 3; rx.strokeStyle = '#fff'; rx.beginPath(); rx.arc(32, 32, 24, 0, 7); rx.stroke();
+  selGeo = new THREE.BufferGeometry(); selGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([9e9, 0, 0]), 3));
+  selPt = new THREE.Points(selGeo, new THREE.PointsMaterial({ size: 30, sizeAttenuation: false, color: 0xffffff, map: new THREE.CanvasTexture(rc), transparent: true, depthTest: false, depthWrite: false }));
+  selPt.frustumCulled = false; selPt.visible = false; selPt.renderOrder = 10; scene.add(selPt);
   // you are here + horizon footprint for low-orbit satellites (550 km, 10 degrees elevation)
   me = new THREE.Mesh(new THREE.SphereGeometry(.009, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff5a3c }));
   scene.add(me);
@@ -190,6 +197,11 @@ function frame(ms) {
         const sz = mode === 'ride' ? .0016 : mode === 'nadir' ? .0001 : clamp(camera.position.distanceTo(p) * .035, .004, .05);
         selModel.scale.setScalar(sz); selModel.visible = mode !== 'nadir';
       }
+      selGeo.attributes.position.setXYZ(0, p.x, p.y, p.z); selGeo.attributes.position.needsUpdate = true;
+      if (follow && (mode === 'globe' || mode === 'above')) {
+        // sustained tracking: glide the view target onto the satellite, keeping the camera's own angle and distance
+        const d = p.clone().sub(controls.target).multiplyScalar(.12); controls.target.add(d); camera.position.add(d);
+      }
       if (mode === 'ride') {
         camera.position.copy(p).addScaledVector(vel, -.0075).addScaledVector(rad, .0022);
         camera.up.copy(rad); camera.lookAt(p.clone().addScaledVector(vel, .02).addScaledVector(rad, -.004));
@@ -202,7 +214,7 @@ function frame(ms) {
     if (frameN % 120 === 0) drawOrbit();
   }
   if (mode === 'above') { const o = geoToScene(state.lat, state.lon); controls.target.copy(o); }
-  pts.material.size = mode === 'above' ? 7 : 4.5;
+  pts.material.size = mode === 'above' ? 9 : 7;
   if (mode === 'globe' || mode === 'above') controls.update();
   // HTML labels
   const W = renderer.domElement.clientWidth, Hh = renderer.domElement.clientHeight;
@@ -240,13 +252,27 @@ function pick(e) {
   if (hit) {
     // make sure it is not on the far side of the Earth
     const eh = raycaster.ray.intersectSphere(new THREE.Sphere(new THREE.Vector3(), 1), new THREE.Vector3());
-    if (!eh || eh.distanceTo(camera.position) > hit.distance) select(list[hit.index].s);
+    if (!eh || eh.distanceTo(camera.position) > hit.distance) {
+      const s = list[hit.index].s;
+      if (sel && sel.norad === s.norad) deselect(); else select(s);
+      return;
+    }
   }
+  if (mode === 'globe' || mode === 'above') deselect(); // tapped empty space (not while riding along)
+}
+
+function deselect() {
+  if (!sel && $('#globeSel').hidden) return;
+  sel = null; follow = false; selPt.visible = false;
+  $('#gsFollow').classList.remove('on'); $('#gsFollow').setAttribute('aria-pressed', 'false');
+  $('#globeSel').hidden = true; if (selModel) { scene.remove(selModel); selModel = null; }
+  for (const l of [orbitLine, trackLine]) if (l) scene.remove(l);
+  if (mode === 'ride' || mode === 'nadir') setMode('globe');
 }
 
 export async function select(s) {
   if (!s?.rec) return;
-  sel = s;
+  sel = s; selPt.visible = true;
   if (selModel) { scene.remove(selModel); selModel = null; }
   const name = modelFor(s, null);
   try { const src = await loadModel(name); selModel = src.clone(); scene.add(selModel); } catch { }
@@ -272,7 +298,9 @@ function setMode(m) {
 function bindUI() {
   $$('#globeMode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
   $$('#globeSpeed button').forEach(b => b.onclick = () => { speed = +b.dataset.s; if (speed === 0) { speed = 1; state.offsetMin = 0; emit('time'); } $$('#globeSpeed button').forEach(x => x.classList.toggle('on', +x.dataset.s === speed && b.dataset.s !== '0')); });
-  $('#gsClose').onclick = () => { sel = null; $('#globeSel').hidden = true; if (selModel) scene.remove(selModel); for (const l of [orbitLine, trackLine]) if (l) scene.remove(l); if (mode === 'ride' || mode === 'nadir') setMode('globe'); };
+  $('#gsClose').onclick = deselect;
+  addEventListener('keydown', e => { if (e.key === 'Escape' && active) deselect(); });
+  $('#gsFollow').onclick = () => { follow = !follow; $('#gsFollow').classList.toggle('on', follow); $('#gsFollow').setAttribute('aria-pressed', String(follow)); if (follow && mode !== 'globe' && mode !== 'above') setMode('globe'); toast(follow ? 'Following. Drag to look around, tap Follow to stop.' : 'Stopped following'); };
   $('#gsRide').onclick = () => setMode('ride'); $('#gsNadir').onclick = () => setMode('nadir');
   $('#globeSearch').oninput = e => {
     const q = e.target.value.trim().toLowerCase(), box = $('#globeResults'); if (q.length < 2) { box.innerHTML = ''; return; }
