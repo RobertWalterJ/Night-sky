@@ -1,5 +1,5 @@
 // Offline support: app shell + catalogue + models are cached; live data is network-first with cache fallback
-const VERSION = 'nightsky-v5-3';
+const VERSION = 'nightsky-v5-4';
 const PREFIX = 'nightsky-'; // all apps share one origin: only ever touch our own caches
 const SHELL = [
   './', 'index.html', 'css/app.css',
@@ -12,7 +12,8 @@ const SHELL = [
   'icons/icon-192.png', 'icons/icon-512.png',
   ...['sun', 'moon', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'iss', 'hubble', 'satellite', 'tiangong', 'gps', 'goes', 'iridium', 'oneweb', 'starlink', 'radarsat', 'eosat', 'cubesat', 'rocketbody', 'debris'].map(m => `models/${m}.glb`),
 ];
-self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
+// cache:'reload' so a fresh install never pins files from the browser's 10 minute HTTP cache
+self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u => fetch(new Request(u, { cache: 'reload' })).then(r => { if (!r.ok) throw new Error(u); return c.put(u, r); })))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith(PREFIX) && !k.startsWith(VERSION)).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
