@@ -34,6 +34,7 @@
       <button data-theme-set="stargazer" title="Stargazer (red, low light)" aria-label="Stargazer mode">●</button>
       <button data-theme-set="terminal" title="Terminal (1980s)" aria-label="Terminal mode">▮</button>
     </div>
+    <button class="iconbtn" id="soundBtn" aria-label="Listen to the sky" title="Listen to the sky (Sky Sound)">♪</button>
     <button class="iconbtn" id="settingsBtn" aria-label="Settings">⚙</button>
   </header>
 
@@ -189,6 +190,20 @@
         <div class="seg" id="feedFilter">
           <button data-f="all" class="on">All</button><button data-f="NASA">NASA</button><button data-f="ESA">ESA</button><button data-f="CSA">CSA</button><button data-f="launch">Launches</button>
         </div>
+      </div>
+      <div class="card sound-card" id="soundCard">
+        <div class="card-h"><h2>Listen to the sky</h2></div>
+        <p class="muted small">Sky Sound turns what is overhead right now into live sound. Left and right follow compass direction, higher pitch means higher in the sky, a rising sweep means something is coming into view and a falling sweep means it is leaving. Satellites, the Moon, planets, the Milky Way and the stars each have their own voice. It is sound made from data, not a recording of space.</p>
+        <div class="sound-row"><button class="btn" id="soundToggle">Listen to the sky</button></div>
+        <p class="sound-status" id="soundStatus" aria-live="off">Tap to start. Headphones sound best.</p>
+        <div class="sound-layers" id="soundLayers">
+          <label><input type="checkbox" data-sl="sats"> Satellites</label>
+          <label><input type="checkbox" data-sl="planets"> Moon and planets</label>
+          <label><input type="checkbox" data-sl="mw"> Milky Way</label>
+          <label><input type="checkbox" data-sl="stars"> Stars</label>
+          <label><input type="checkbox" id="sound3d"> Headphones 3D</label>
+        </div>
+        <div class="dark-ctl"><span class="small muted">Volume</span><input type="range" id="soundVol" min="0" max="1" step="0.05" aria-label="Volume"></div>
       </div>
       <div class="grid-feed">
         <div class="card apod" id="apodCard"><p class="muted">Loading NASA picture of the day…</p></div>

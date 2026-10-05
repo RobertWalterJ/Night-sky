@@ -405,3 +405,12 @@ html, body { overflow-x: hidden; }
 .find-hud .fd { font-size: 1.05rem; line-height: 1.35; }
 .find-hud.found { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent); }
 .find-hud .iconbtn { align-self: flex-start; min-width: 44px; min-height: 44px; }
+
+/* Sky Sound panel */
+.sound-card .btn { min-height: 52px; font-size: 1.05rem; padding: 12px 22px; }
+.sound-row { margin: 10px 0 6px; }
+.sound-status { min-height: 1.4em; margin: 6px 0 10px; font-size: 1rem; }
+.sound-layers { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 10px; }
+.sound-layers label { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: .98rem; }
+.sound-layers input[type=checkbox] { width: 22px; height: 22px; }
+#soundBtn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

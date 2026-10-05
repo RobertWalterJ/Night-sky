@@ -1,9 +1,9 @@
 // Offline support: app shell + catalogue + models are cached; live data is network-first with cache fallback
-const VERSION = 'nightsky-v5-5';
+const VERSION = 'nightsky-v5-6';
 const PREFIX = 'nightsky-'; // all apps share one origin: only ever touch our own caches
 const SHELL = [
   './', 'index.html', 'css/app.css',
-  'js/app.js', 'js/util.js', 'js/astro.js', 'js/sky.js', 'js/ar3d.js', 'js/sats.js', 'js/tonight.js', 'js/info.js', 'js/feed.js', 'js/radio.js', 'js/lab.js', 'js/overhead.js', 'js/events.js', 'js/earth.js', 'js/calendar.js', 'js/comets.js', 'js/satinfo.js', 'js/spacecomms.js', 'js/darksky.js',
+  'js/app.js', 'js/util.js', 'js/astro.js', 'js/sky.js', 'js/ar3d.js', 'js/sats.js', 'js/tonight.js', 'js/info.js', 'js/feed.js', 'js/radio.js', 'js/sound.js', 'js/lab.js', 'js/overhead.js', 'js/events.js', 'js/earth.js', 'js/calendar.js', 'js/comets.js', 'js/satinfo.js', 'js/spacecomms.js', 'js/darksky.js',
   'vendor/three.module.min.js', 'vendor/astronomy.browser.min.js', 'vendor/satellite.min.js',
   'vendor/jsm/loaders/GLTFLoader.js', 'vendor/jsm/utils/BufferGeometryUtils.js', 'vendor/jsm/controls/OrbitControls.js',
   'data/sky.json', 'data/airports.json',
