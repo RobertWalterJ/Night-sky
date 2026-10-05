@@ -244,7 +244,7 @@ export function stopSound() {
 function paint() {
   const on = isPlaying();
   $('#soundToggle')?.classList.toggle('on', on); if ($('#soundToggle')) $('#soundToggle').textContent = on ? 'Stop listening' : 'Listen to the sky';
-  $('#soundBtn')?.classList.toggle('on', on);
+  $('#soundBtn')?.classList.toggle('on', on); if ($('#soundBtn')) $('#soundBtn').hidden = !on;
 }
 
 export function initSound() {

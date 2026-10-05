@@ -32,6 +32,8 @@ function autoTheme() {
   applyTheme(night ? 'stargazer' : (state.theme === 'stargazer' ? 'airy' : state.theme), false);
 }
 
+function closeMenu() { $('#menu').hidden = true; }
+
 // ---------- routing ----------
 function go(v) {
   if (v === view) return;
@@ -143,7 +145,15 @@ function bindSettings() {
 async function boot() {
   applyTheme(state.theme);
   $$('[data-theme-set]').forEach(b => b.onclick = () => { state.manualThisSession = true; applyTheme(b.dataset.themeSet); });
-  $$('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+  $$('[data-go]').forEach(b => b.onclick = () => { go(b.dataset.go); closeMenu(); });
+  // menu (hamburger) and quick theme cycle
+  $('#menuBtn').onclick = () => { $('#menu').hidden = false; };
+  $('#menuClose').onclick = closeMenu;
+  $('#menu').onclick = e => { if (e.target.id === 'menu') closeMenu(); };
+  $('#settingsBtn').addEventListener('click', closeMenu);
+  const THEMES = ['airy', 'cosmos', 'stargazer', 'terminal'], ICON = { airy: '◐', cosmos: '✦', stargazer: '●', terminal: '▮' };
+  $('#themeCycle').onclick = () => { const i = THEMES.indexOf(document.documentElement.dataset.theme); state.manualThisSession = true; applyTheme(THEMES[(i + 1) % 4]); };
+  on('theme', t => { $('#themeCycle').textContent = ICON[t] || '◐'; }); $('#themeCycle').textContent = ICON[document.documentElement.dataset.theme] || '◐';
   bindLocation(); bindTime(); bindSearch(); bindSettings();
   $('#sheetClose').onclick = closeInfo;
   $('#sheet').onclick = e => { if (e.target.id === 'sheet') closeInfo(); };
@@ -175,7 +185,7 @@ async function boot() {
   });
 
   const start = (location.hash || '').slice(1);
-  go(['tonight', 'overhead', 'sky', 'earth', 'events', 'feed', 'radio', 'lab'].includes(start) ? start : 'tonight');
+  go(['tonight', 'overhead', 'sky', 'earth', 'listen', 'events', 'feed', 'radio', 'lab'].includes(start) ? start : 'tonight');
   if (!saved) gps(true);
   loadGroup('stations').then(() => loadGroup('visual')).then(() => sky.invalidate()).catch(() => { });
   on('layers', l => { if (l === 'starlink' && state.layers.starlink) loadGroup('starlink').then(() => sky.invalidate()).catch(() => toast('Could not load Starlink orbits')); });
