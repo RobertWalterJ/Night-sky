@@ -87,6 +87,7 @@ export function createViz(cv, els = {}) {
     for (const a of [30, 60]) { g.beginPath(); g.arc(cx, cy, R * (90 - a) / 90, 0, 7); g.stroke(); }
     g.fillStyle = alpha(c.muted, .9); g.font = `12px ${c.font}`; g.textAlign = 'center';
     g.fillText('overhead', cx, cy + 16); g.fillText('60°', cx, cy - R / 3 + 12); g.fillText('30°', cx, cy - R * 2 / 3 + 12); g.fillText('horizon', cx + R * .72, cy + R * .72 + 14);
+    for (const [x, y, w] of [[cx, cy + 16, 62], [cx, cy - R / 3 + 12, 30], [cx, cy - R * 2 / 3 + 12, 30], [cx + R * .72, cy + R * .72 + 14, 54]]) placed.push([x - w / 2, y - 12, w, 16]); // keep satellite labels off the ring labels
     g.fillStyle = c.text; g.font = `600 15px ${c.font}`; g.textBaseline = 'middle';
     for (const [l, a] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) { const [x, y] = pos(a, -8); g.fillText(l, x + (a === 90 ? 10 : a === 270 ? -10 : 0), y + (a === 0 ? -9 : a === 180 ? 9 : 0)); }
     g.textBaseline = 'alphabetic';
