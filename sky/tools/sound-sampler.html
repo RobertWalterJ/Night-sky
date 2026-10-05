@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" data-theme="stargazer">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Sky sound sampler</title>
+<link rel="stylesheet" href="../css/app.css">
+<style>
+  html, body { height: auto !important; overflow: auto !important; }
+  body { padding: 16px 16px 80px; max-width: 640px; margin: 0 auto; }
+  h1 { margin: 6px 0 4px; }
+  .back { display: inline-block; margin: 4px 0 8px; padding: 10px 0; color: var(--accent); text-decoration: underline; }
+  .snd { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; margin: 10px 0; padding: 14px 16px; min-height: 64px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+  .snd b { font-size: 1.6rem; min-width: 1.6em; text-align: center; color: var(--accent); }
+  .snd span { display: flex; flex-direction: column; gap: 2px; } .snd small { color: var(--muted); font-size: .88rem; line-height: 1.3; }
+  .snd.on { background: var(--accent); color: var(--accent-ink); } .snd.on b, .snd.on small { color: var(--accent-ink); }
+</style>
+</head>
+<body>
+<a class="back" href="../index.html#listen">Back to Night Sky</a>
+<h1>Sound sampler</h1>
+<p class="muted">Early space sounds, recreated with simple tones. They are homages, not recordings. Tap each one and tell Claude which letter is closest to the sound you remember, or what is different (higher, longer, more pulsing...).</p>
+<div id="list"></div>
+<script>
+const AC = window.AudioContext || window.webkitAudioContext; let ctx = null;
+const wait = ms => new Promise(r => setTimeout(r, ms));
+function tone(t, hz, len, o = {}) { // sine with attack/decay, optional glide, tremolo, echo
+  const osc = ctx.createOscillator(), g = ctx.createGain(); osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(o.from || hz, t); if (o.from) osc.frequency.exponentialRampToValueAtTime(hz, t + (o.glide || len));
+  const a = o.attack ?? .01, v = o.vol ?? .3; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + a); if (o.hold) g.gain.setValueAtTime(v, t + len - (o.rel ?? .02)); g.gain.exponentialRampToValueAtTime(.0001, t + len);
+  let out = g; if (o.trem) { const l = ctx.createOscillator(), lg = ctx.createGain(), tg = ctx.createGain(); tg.gain.value = 1 - o.depth / 2 || .5; l.frequency.value = o.trem; lg.gain.value = (o.depth ?? 1) / 2; l.connect(lg); lg.connect(tg.gain); g.connect(tg); out = tg; l.start(t); l.stop(t + len + .1); }
+  osc.connect(g); out.connect(ctx.destination);
+  if (o.echo) { const d = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain(); d.delayTime.value = o.echo; fb.gain.value = .45; wet.gain.value = .5; out.connect(d); d.connect(fb); fb.connect(d); d.connect(wet); wet.connect(ctx.destination); }
+  osc.start(t); osc.stop(t + len + .1);
+}
+const SOUNDS = [
+  ['A', 'Beep before and after speaking', 'Two short, squeaky, high beeps, one before and one after a voice call (the Quindar tones: 2525 Hz, then 2475 Hz).', t => { tone(t, 2525, .25, { hold: true, vol: .22 }); tone(t + 1.3, 2475, .25, { hold: true, vol: .22 }); }, 2.1],
+  ['B', 'Beep, beep (Sputnik style)', 'Alternating beeps in two tones, about a third of a second each. The first satellite sounded like this on radios.', t => { for (let i = 0; i < 6; i++) tone(t + i * .55, i % 2 ? 1900 : 1300, .33, { hold: true, vol: .25 }); }, 3.6],
+  ['C', 'One long high ping', 'A single high pure ping that rings and slowly fades, like sonar.', t => tone(t, 1800, 3.2, { from: 1830, glide: .2, vol: .3, echo: .35 }), 3.8],
+  ['D', 'Long ping that pulses', 'A high ping that wobbles, pulsing about six times a second as it fades.', t => tone(t, 1500, 3.4, { trem: 6, depth: .9, vol: .32, echo: .3 }), 4],
+  ['E', 'Squeaky rising chirp', 'A quick rising squeak, repeated, like a ranging or tracking signal.', t => { for (let i = 0; i < 4; i++) tone(t + i * .9, 2600, .55, { from: 800, glide: .5, vol: .22 }); }, 4],
+  ['F', 'Pulsing beeps, steady', 'A steady high beep pulsing like a heartbeat, the way a beacon repeats.', t => { for (let i = 0; i < 8; i++) tone(t + i * .5, 2200, .22, { hold: true, vol: .22 }); }, 4.3],
+  ['G', 'Telemetry warble', 'Fast chatter between two tones, like data being sent.', t => { for (let i = 0; i < 40; i++) tone(t + i * .05, i % 3 ? 1200 : 2200, .045, { hold: true, vol: .15, attack: .004, rel: .005 }); }, 2.4],
+  ['H', 'Stepped tones', 'A staircase of tones climbing up, like a ranging sequence.', t => { [700, 900, 1150, 1450, 1850, 2350].forEach((f, i) => tone(t + i * .22, f, .2, { hold: true, vol: .22 })); }, 1.8],
+];
+const list = document.getElementById('list');
+for (const [k, title, desc, fn, dur] of SOUNDS) {
+  const b = document.createElement('button'); b.className = 'snd'; b.innerHTML = `<b>${k}</b><span><strong>${title}</strong><small>${desc}</small></span>`;
+  b.onclick = async () => { ctx ||= new AC(); await ctx.resume(); document.querySelectorAll('.snd').forEach(x => x.classList.remove('on')); b.classList.add('on'); fn(ctx.currentTime + .05); setTimeout(() => b.classList.remove('on'), dur * 1000); };
+  list.appendChild(b);
+}
+try { const t = JSON.parse(localStorage.getItem('ns:theme')); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+</body>
+</html>
