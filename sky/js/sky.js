@@ -174,6 +174,7 @@ export function createSky(cv, cfg = {}) {
 
   // ---------- draw ----------
   function draw() {
+    if (W < 2 || H < 2) return; // canvas is hidden or not laid out yet
     const col = C(), t = now(), L = { ...state.layers };
     if (dome) { L.below = false; L.ground = false; L.grid = false; L.dsos = !mini && L.dsos; }
     setup();
