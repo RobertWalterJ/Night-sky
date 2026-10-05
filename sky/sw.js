@@ -1,5 +1,5 @@
 // Offline support: app shell + catalogue + models are cached; live data is network-first with cache fallback
-const VERSION = 'nightsky-v5-6';
+const VERSION = 'nightsky-v5-7';
 const PREFIX = 'nightsky-'; // all apps share one origin: only ever touch our own caches
 const SHELL = [
   './', 'index.html', 'css/app.css',
@@ -21,7 +21,7 @@ self.addEventListener('fetch', e => {
   if (u.pathname.endsWith('manifest.webmanifest')) return; // always fresh from the network so install identity never goes stale
   if (/somafm|radio-browser|mediacp|stream|icecast|dsn\/data/i.test(u.href) || e.request.destination === 'audio') return; // never cache streams
   if (u.origin === location.origin) {
-    e.respondWith(caches.open(VERSION).then(c => c.match(e.request, { ignoreSearch: true })).then(r => r || fetch(e.request).then(res => { const cp = res.clone(); caches.open(VERSION).then(c => c.put(e.request, cp)); return res; })));
+    e.respondWith(caches.open(VERSION).then(c => c.match(e.request, { ignoreSearch: true })).then(r => r || fetch(e.request).then(res => { if (res.ok) { const cp = res.clone(); caches.open(VERSION).then(c => c.put(e.request, cp)); } return res; })));
   } else if (/open-meteo|celestrak|swpc|wikipedia|thespacedevs|spaceflightnewsapi|nasa\.gov|djlorenz/.test(u.host)) {
     e.respondWith(fetch(e.request).then(res => { if (res.ok) { const cp = res.clone(); caches.open(VERSION + '-data').then(c => c.put(e.request, cp)); } return res; }).catch(() => caches.open(VERSION + '-data').then(c => c.match(e.request))));
   }
