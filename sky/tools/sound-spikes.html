@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en" data-theme="stargazer">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Sky sound test</title>
+<link rel="stylesheet" href="../css/app.css">
+<style>
+  html, body { height: auto !important; overflow: auto !important; }
+  body { padding: 16px 16px 80px; max-width: 640px; margin: 0 auto; }
+  h1 { margin: 6px 0 4px; } h2 { margin: 0 0 6px; font-size: 1.15rem; }
+  .step { margin: 16px 0; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+  .step p { margin: 6px 0; line-height: 1.45; }
+  .big { min-height: 56px; font-size: 1.05rem; padding: 12px 22px; margin: 8px 8px 8px 0; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 8px 0; }
+  .row label { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 1rem; }
+  .row input[type=radio] { width: 22px; height: 22px; }
+  .status { min-height: 1.6em; font-weight: 600; margin: 6px 0; }
+  .flash { width: 100%; height: 90px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); margin: 8px 0; transition: background .04s; }
+  .flash.on { background: var(--accent); }
+  input[type=range] { width: 100%; height: 36px; accent-color: var(--accent); }
+  pre { white-space: pre-wrap; word-break: break-word; padding: 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); font-size: .85rem; max-height: 340px; overflow: auto; }
+  .back { display: inline-block; margin: 4px 0 8px; padding: 10px 0; color: var(--accent); text-decoration: underline; font-size: 1rem; }
+  .ok { color: var(--good); } .no { color: var(--bad); }
+</style>
+</head>
+<body>
+<a class="back" href="../index.html#listen">Back to Night Sky</a>
+<h1>Sound test</h1>
+<p class="muted">Four short tests that tell us how your phone plays sound, so Sky Sound can line up with the map and keep playing with the screen off. About 10 minutes. Use a comfortable volume. Nothing leaves your phone unless you press Copy at the end and paste it to Claude.</p>
+
+<section class="step" id="s1">
+  <h2>1. Check this phone</h2>
+  <p>Reads what your phone says about its audio.</p>
+  <button class="btn big" id="b1">Check this phone</button>
+  <pre id="o1" hidden></pre>
+</section>
+
+<section class="step" id="s2">
+  <h2>2. Screen-off test</h2>
+  <p>Does sound keep playing when the screen turns off? Pick a way to play, tap Start, then press the power button to turn the screen off. Wait 20 seconds. Turn the screen on again.</p>
+  <div class="row" id="routes2">
+    <label><input type="radio" name="r2" value="stream" checked> A: the way the app does it now</label>
+    <label><input type="radio" name="r2" value="direct"> B: direct</label>
+    <label><input type="radio" name="r2" value="dual"> C: both, switching</label>
+  </div>
+  <button class="btn big" id="b2">Start</button><button class="btn ghost big" id="b2stop">Stop</button>
+  <p class="status" id="st2"></p>
+  <div id="ask2" hidden>
+    <p>Did you hear the beeps while the screen was off?</p>
+    <button class="btn big" data-heard="yes">Yes</button><button class="btn ghost big" data-heard="no">No</button><button class="btn ghost big" data-heard="unsure">Not sure</button>
+  </div>
+</section>
+
+<section class="step" id="s3">
+  <h2>3. Line up sound and flash</h2>
+  <p>You will hear a click once a second and see the box flash. Move the slider until the flash and the click feel exactly together. Then tap Save.</p>
+  <div class="row">
+    <label><input type="radio" name="r3" value="direct" checked> Direct</label>
+    <label><input type="radio" name="r3" value="stream"> The way the app does it now</label>
+  </div>
+  <button class="btn big" id="b3">Start</button><button class="btn ghost big" id="b3stop">Stop</button>
+  <div class="flash" id="flash3"></div>
+  <input type="range" id="sl3" min="-150" max="350" step="5" value="0" aria-label="Sync nudge">
+  <p>Flash earlier (left) <span style="float:right">Flash later (right)</span></p>
+  <p class="status" id="st3">Nudge: 0 ms</p>
+  <button class="btn big" id="b3save">Save this value</button>
+</section>
+
+<section class="step" id="s4">
+  <h2>4. Measure the delay with the microphone (optional)</h2>
+  <p>Use the phone speaker, not headphones, in a quiet room. You will hear 10 short chirps. The microphone listens and works out how long each way of playing takes. It stores nothing and sends nothing. If it asks for the microphone, tap Allow.</p>
+  <button class="btn big" id="b4">Measure</button>
+  <p class="status" id="st4"></p>
+</section>
+
+<section class="step" id="s5">
+  <h2>5. Speed test</h2>
+  <p>Checks how much work different sound effects ask of your phone. Takes about 15 seconds. Stay on this page.</p>
+  <button class="btn big" id="b5">Run speed test</button>
+  <p class="status" id="st5"></p>
+</section>
+
+<section class="step" id="s6">
+  <h2>6. Send me the results</h2>
+  <button class="btn big" id="b6">Copy results</button><button class="btn ghost big" id="b6share">Share</button>
+  <p class="status" id="st6"></p>
+  <pre id="out"></pre>
+</section>
+
+<script type="module">
+const $ = s => document.querySelector(s);
+try { const t = JSON.parse(localStorage.getItem('ns:theme')); if (t) document.documentElement.dataset.theme = t; } catch {}
+const R = { when: new Date().toISOString(), page: 'sound-spikes v1' };
+const show = () => { $('#out').textContent = JSON.stringify(R, null, 1); try { localStorage.setItem('ns:spikes', JSON.stringify(R)); } catch {} };
+const med = a => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
+const AC = window.AudioContext || window.webkitAudioContext;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ---------- route builders ----------
+function silentEl(ctx, md) { const el = new Audio(); el.srcObject = md.stream; el.playsInline = true; return el; }
+function buildRoute(ctx, kind) {
+  const src = ctx.createGain(); const r = { src, kind, els: [], cleanup() { try { src.disconnect(); } catch {} r.els.forEach(e => { e.pause(); e.srcObject = null; }); } };
+  if (kind === 'direct') { src.connect(ctx.destination); return r; }
+  const md = ctx.createMediaStreamDestination(); const el = silentEl(ctx, md); r.els.push(el);
+  if (kind === 'stream') { src.connect(md); el.play().catch(() => {}); return r; }
+  // dual: audible directly while the screen is on, through the element while hidden (the idea from the spec)
+  const direct = ctx.createGain(), viaEl = ctx.createGain(); src.connect(direct); direct.connect(ctx.destination); src.connect(viaEl); viaEl.connect(md); el.play().catch(() => {});
+  const setRoute = hidden => { const t = ctx.currentTime; (hidden ? viaEl : direct).gain.setTargetAtTime(1, t, .04); (hidden ? direct : viaEl).gain.setTargetAtTime(0, t, .04); };
+  setRoute(document.hidden); r.vis = () => setRoute(document.hidden); document.addEventListener('visibilitychange', r.vis);
+  const c = r.cleanup; r.cleanup = () => { document.removeEventListener('visibilitychange', r.vis); c(); };
+  return r;
+}
+function beep(ctx, route, at, hz = 880, len = .09, vol = .35) { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = hz; g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(vol, at + .005); g.gain.setValueAtTime(vol, at + len - .02); g.gain.linearRampToValueAtTime(0, at + len); o.connect(g); g.connect(route.src); o.start(at); o.stop(at + len + .02); }
+async function newCtx() { const ctx = new AC({ latencyHint: 'playback' }); await ctx.resume(); return ctx; }
+
+// ---------- 1. info ----------
+$('#b1').onclick = async () => {
+  const ctx = await newCtx(); await sleep(400); const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null; let model = null;
+  try { model = (await navigator.userAgentData?.getHighEntropyValues(['model', 'platformVersion']))?.model; } catch {}
+  const info = { model, ua: navigator.userAgent, sampleRate: ctx.sampleRate, baseLatencyMs: Math.round((ctx.baseLatency || 0) * 1000), outputLatencyMs: Math.round((ctx.outputLatency || 0) * 1000), hasGetOutputTimestamp: !!ctx.getOutputTimestamp, outputTimestamp: ts && { contextTime: +ts.contextTime.toFixed(3), performanceTime: Math.round(ts.performanceTime) },
+    hasAudioWorklet: !!ctx.audioWorklet, hasMediaSession: !!navigator.mediaSession, hasRenderCapacity: !!ctx.renderCapacity, hasPlaybackStats: !!ctx.playbackStats, screen: `${screen.width}x${screen.height} @${devicePixelRatio}`, theme: document.documentElement.dataset.theme };
+  try { const b = await navigator.getBattery?.(); if (b) info.battery = Math.round(b.level * 100) + '%' + (b.charging ? ' charging' : ''); } catch {}
+  R.info = info; $('#o1').hidden = false; $('#o1').textContent = JSON.stringify(info, null, 1); ctx.close(); show();
+};
+
+// ---------- 2. screen-off ----------
+let t2 = null;
+$('#b2').onclick = async () => {
+  if (t2) return; const kind = document.querySelector('input[name=r2]:checked').value, ctx = await newCtx(), route = buildRoute(ctx, kind); let n = 0, next = ctx.currentTime + .3;
+  const hz = { stream: 660, direct: 880, dual: 770 }[kind];
+  const state = { kind, ctx, route, hiddenAt: null, events: [], timer: setInterval(() => { while (next < ctx.currentTime + 1.5) { beep(ctx, route, next, hz); next += 1; n++; } $('#st2').textContent = `Playing ${kind}. Context: ${ctx.state}. ${Math.round(ctx.currentTime)} s. Now turn the screen off for 20 seconds, then back on.`; }, 250) };
+  state.vis = () => { if (document.hidden) state.hiddenAt = { perf: performance.now(), audio: ctx.currentTime, state: ctx.state }; else if (state.hiddenAt) { const h = (performance.now() - state.hiddenAt.perf) / 1000, a = ctx.currentTime - state.hiddenAt.audio; state.events.push({ hiddenSec: +h.toFixed(1), audioAdvancedSec: +a.toFixed(1), stateWhenHidden: state.hiddenAt.state, stateNow: ctx.state }); state.hiddenAt = null; $('#st2').textContent = `Screen was off ${h.toFixed(0)} s. The sound clock ran ${a.toFixed(0)} s (${a > h * .9 ? 'kept running' : 'was paused'}).`; $('#ask2').hidden = false; } };
+  document.addEventListener('visibilitychange', state.vis); t2 = state; $('#ask2').hidden = true;
+};
+const stop2 = () => { if (!t2) return; clearInterval(t2.timer); document.removeEventListener('visibilitychange', t2.vis); t2.route.cleanup(); t2.ctx.close(); (R.screenOff ||= {})[t2.kind] = { ...(R.screenOff[t2.kind] || {}), events: t2.events }; t2 = null; show(); };
+$('#b2stop').onclick = stop2;
+document.querySelectorAll('[data-heard]').forEach(b => b.onclick = () => { const k = document.querySelector('input[name=r2]:checked').value; (R.screenOff ||= {})[k] = { ...(R.screenOff[k] || {}), heardWithScreenOff: b.dataset.heard, events: t2?.events || R.screenOff?.[k]?.events }; $('#ask2').hidden = true; $('#st2').textContent = 'Saved. You can test another way, or stop.'; show(); });
+
+// ---------- 3. manual sync ----------
+let t3 = null, nudge = 0;
+$('#sl3').oninput = e => { nudge = +e.target.value; $('#st3').textContent = `Nudge: ${nudge} ms`; };
+$('#b3').onclick = async () => {
+  if (t3) return; const kind = document.querySelector('input[name=r3]:checked').value, ctx = await newCtx(), route = buildRoute(ctx, kind); let next = ctx.currentTime + .5;
+  const timer = setInterval(() => { while (next < ctx.currentTime + 2) { const at = next, ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : { contextTime: ctx.currentTime, performanceTime: performance.now() };
+      beep(ctx, route, at, 1000, .03, .5); const due = ts.performanceTime + (at - ts.contextTime) * 1000 + nudge * 1; setTimeout(() => { $('#flash3').classList.add('on'); setTimeout(() => $('#flash3').classList.remove('on'), 90); }, Math.max(0, due - performance.now())); next += 1.2; } }, 200);
+  t3 = { kind, ctx, route, timer };
+};
+$('#b3stop').onclick = () => { if (!t3) return; clearInterval(t3.timer); t3.route.cleanup(); t3.ctx.close(); t3 = null; };
+$('#b3save').onclick = () => { const k = document.querySelector('input[name=r3]:checked').value; (R.syncNudgeMs ||= {})[k] = nudge; $('#st3').textContent = `Saved ${nudge} ms for "${k}".`; show(); };
+
+// ---------- 4. microphone measurement ----------
+function makeChirp(sr, ms = 40, f0 = 1500, f1 = 4500) { const n = Math.round(sr * ms / 1000), out = new Float32Array(n); for (let i = 0; i < n; i++) { const t = i / sr, T = ms / 1000, ph = 2 * Math.PI * (f0 * t + (f1 - f0) * t * t / (2 * T)); out[i] = Math.sin(ph) * Math.sin(Math.PI * i / n) ** 2; } return out; }
+function detectChirp(mic, tpl) {
+  const dec = 8, n = mic.length, m = tpl.length; if (n < m * 1.2) return { index: 0, quality: 0 };
+  const env = new Float32Array(Math.floor(n / dec)), te = new Float32Array(Math.floor(m / dec));
+  for (let k = 0; k < env.length; k++) { let s = 0; for (let j = 0; j < dec; j++) s += Math.abs(mic[k * dec + j]); env[k] = s / dec; }
+  for (let k = 0; k < te.length; k++) { let s = 0; for (let j = 0; j < dec; j++) s += Math.abs(tpl[k * dec + j]); te[k] = s / dec; }
+  let best = -1, bestV = -1, sum = 0, cnt = 0;
+  for (let s = 0; s + te.length <= env.length; s++) { let c = 0; for (let k = 0; k < te.length; k++) c += env[s + k] * te[k]; sum += c; cnt++; if (c > bestV) { bestV = c; best = s; } }
+  let ref = best * dec, refV = -1;
+  for (let s = Math.max(0, best * dec - dec * 2); s <= Math.min(n - m, best * dec + dec * 2); s++) { let c = 0; for (let k = 0; k < m; k++) c += mic[s + k] * tpl[k]; if (c > refV) { refV = c; ref = s; } }
+  return { index: ref, quality: bestV / ((sum / cnt) + 1e-9) };
+}
+$('#b4').onclick = async () => {
+  const st = $('#st4'); st.textContent = 'Asking for the microphone...';
+  let mic; try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); } catch (e) { st.textContent = 'Microphone not allowed. That is fine, skip this test.'; R.mic = { error: String(e.name || e) }; show(); return; }
+  const ctx = await newCtx(), sr = ctx.sampleRate; const tpl = makeChirp(sr);
+  const code = `class Rec extends AudioWorkletProcessor { process(i){ const c=i[0][0]; if(c) this.port.postMessage({f:currentFrame,d:c.slice()}); return true; } } registerProcessor('rec', Rec);`;
+  const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' })); await ctx.audioWorklet.addModule(url);
+  const chunks = []; const node = new AudioWorkletNode(ctx, 'rec', { numberOfOutputs: 1, outputChannelCount: [1] }); node.port.onmessage = e => chunks.push(e.data);
+  const ms = ctx.createMediaStreamSource(mic), mute = ctx.createGain(); mute.gain.value = 0; ms.connect(node); node.connect(mute); mute.connect(ctx.destination);
+  const routes = { direct: buildRoute(ctx, 'direct'), stream: buildRoute(ctx, 'stream') }; const buf = ctx.createBuffer(1, tpl.length, sr); buf.copyToChannel(tpl, 0);
+  const plan = []; const t0 = ctx.currentTime + 1.2;
+  for (let k = 0; k < 10; k++) { const kind = k % 2 ? 'stream' : 'direct', at = t0 + k * 1.0, s = ctx.createBufferSource(); s.buffer = buf; const g = ctx.createGain(); g.gain.value = .9; s.connect(g); g.connect(routes[kind].src); s.start(at); plan.push({ kind, at }); }
+  st.textContent = 'Listening to 10 chirps. Keep quiet...'; await sleep(1200 + 10 * 1000 + 1500);
+  node.disconnect(); mic.getTracks().forEach(t => t.stop());
+  const first = chunks.length ? chunks[0].f : 0, last = chunks.length ? chunks[chunks.length - 1].f + 128 : 0, rec = new Float32Array(last - first); for (const c of chunks) rec.set(c.d, c.f - first);
+  const inLat = (mic.getAudioTracks()[0]?.getSettings?.().latency ?? .02) * 1000, loops = { direct: [], stream: [] }, qs = { direct: [], stream: [] };
+  for (const p of plan) { const a = Math.max(0, Math.round(p.at * sr) - first - Math.round(.05 * sr)), seg = rec.subarray(a, Math.min(rec.length, a + Math.round(.9 * sr))), d = detectChirp(seg, tpl); qs[p.kind].push(+d.quality.toFixed(1)); if (d.quality > 3) loops[p.kind].push(((first + a + d.index) / sr - p.at) * 1000); }
+  const md = { direct: med(loops.direct), stream: med(loops.stream) }, extra = md.direct != null && md.stream != null ? md.stream - md.direct : null;
+  R.mic = { sampleRate: sr, inputLatencyMs: Math.round(inLat), loopMs: { direct: md.direct && Math.round(md.direct), stream: md.stream && Math.round(md.stream) }, extraDelayOfAppRouteMs: extra != null ? Math.round(extra) : null, accepted: { direct: loops.direct.length, stream: loops.stream.length }, quality: qs };
+  Object.values(routes).forEach(r => r.cleanup()); ctx.close(); URL.revokeObjectURL(url); show();
+  st.textContent = extra != null ? `The way the app plays now adds about ${Math.round(extra)} ms more than playing directly.` : 'Could not hear the chirps well enough. Turn the volume up, use the speaker in a quiet room, and try again.';
+};
+
+// ---------- 5. speed test ----------
+function irBuf(ctx, secs) { const n = Math.floor(ctx.sampleRate * secs), b = ctx.createBuffer(2, n, ctx.sampleRate); for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let lp = 0; for (let i = 0; i < n; i++) { lp += (Math.random() * 2 - 1 - lp) * .35; d[i] = lp * Math.pow(1 - i / n, 2.6); } } return b; }
+async function bench(label, { voices = 8, irSecs = 0, hrtf = 0 }) {
+  const SR = 48000, SEC = 8, ctx = new OfflineAudioContext(2, SR * SEC, SR), master = ctx.createGain(); master.gain.value = .2; master.connect(ctx.destination);
+  let fx = null; if (irSecs) { fx = ctx.createGain(); const cv = ctx.createConvolver(); cv.buffer = irBuf(ctx, irSecs); fx.connect(cv); cv.connect(master); }
+  for (let i = 0; i < voices; i++) { const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(); o.type = i % 2 ? 'sawtooth' : 'triangle'; o.frequency.value = 110 * (1 + i * .37); f.type = 'lowpass'; f.frequency.value = 900; g.gain.value = .1; o.connect(f); f.connect(g);
+    if (i < hrtf) { const p = ctx.createPanner(); p.panningModel = 'HRTF'; p.positionX.value = Math.sin(i); p.positionZ.value = -Math.cos(i); g.connect(p); p.connect(master); } else g.connect(master); if (fx) g.connect(fx); o.start(); }
+  const t = performance.now(); await ctx.startRendering(); const sec = (performance.now() - t) / 1000; return { label, audioSec: SEC, realSec: +sec.toFixed(2), speedX: +(SEC / sec).toFixed(1) };
+}
+$('#b5').onclick = async () => {
+  const st = $('#st5'), out = []; for (const [label, o] of [['8 voices, no reverb', { voices: 8 }], ['8 voices + reverb 3.2 s', { voices: 8, irSecs: 3.2 }], ['8 voices + reverb 1.8 s', { voices: 8, irSecs: 1.8 }], ['8 voices + reverb 1.8 s + 4 headphone-3D', { voices: 8, irSecs: 1.8, hrtf: 4 }], ['24 voices + reverb 1.8 s', { voices: 24, irSecs: 1.8 }]]) { st.textContent = 'Running: ' + label + '...'; await sleep(50); out.push(await bench(label, o)); }
+  R.speed = out; show(); st.textContent = 'Done. Higher "speedX" is better (more than 10 is comfortable).';
+};
+
+// ---------- 6. share ----------
+$('#b6').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(R)); $('#st6').textContent = 'Copied. Paste it into the chat with Claude.'; } catch { $('#st6').textContent = 'Could not copy. Select the text below and copy it yourself.'; } };
+$('#b6share').onclick = async () => { try { await navigator.share({ title: 'Night Sky sound test', text: JSON.stringify(R) }); } catch { $('#st6').textContent = 'Share was cancelled or is not available.'; } };
+show();
+</script>
+</body>
+</html>
