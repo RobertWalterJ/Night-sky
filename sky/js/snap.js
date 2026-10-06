@@ -7,7 +7,7 @@ export function composeFrame({ video, overlays, W, H, scale = 2 }) {
   const c = document.createElement('canvas'); c.width = Math.round(W * scale); c.height = Math.round(H * scale);
   const g = c.getContext('2d'); g.scale(scale, scale);
   g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
-  const vw = video?.videoWidth, vh = video?.videoHeight;
+  const vw = video?.videoWidth || video?.width, vh = video?.videoHeight || video?.height; // a video element, or any image or canvas
   if (vw && vh) { const s = Math.max(W / vw, H / vh), dw = vw * s, dh = vh * s; g.drawImage(video, (W - dw) / 2, (H - dh) / 2, dw, dh); }
   for (const o of overlays) if (o && o.width && o.height) g.drawImage(o, 0, 0, W, H);
   return c;
