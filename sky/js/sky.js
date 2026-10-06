@@ -221,12 +221,12 @@ export function createSky(cv, cfg = {}) {
       }
       ctx.stroke();
       if (L.constNames && !mini && (dome ? R > 150 : V.fov > 12)) {
-        ctx.fillStyle = col.cons; ctx.font = font(dome ? (R < 260 ? 8.5 : 10) : 11, 500); ctx.textAlign = 'center';
+        ctx.fillStyle = col.cons; ctx.font = font(dome ? (R < 260 ? 9.5 : 11) : 12, 600); ctx.textAlign = 'center';
         for (const c of Object.values(cat.cons)) {
           const e = toEnu(...c.v); if (!vis(e)) continue;
           const s = project(e); if (!onScreen(s, 0)) continue;
           ctx.globalAlpha = .75 * dim(e);
-          ctx.fillText(col.light ? c.n.toUpperCase() : c.n, s[0], s[1]);
+          ctx.fillText(c.n, s[0], s[1]);
           hits.push({ x: s[0], y: s[1], r: 14, pri: 1, obj: { kind: 'const', id: 'con' + c.n, name: c.n, gen: c.g, v: e } });
         }
         ctx.globalAlpha = 1;

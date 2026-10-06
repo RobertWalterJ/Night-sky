@@ -24,7 +24,7 @@ export const state = {
   nasaKey: store.get('nasaKey', ''),
   calOffset: store.get('calOffset', 0), // manual compass alignment correction, degrees
   declination: 0, // magnetic declination at the observer (World Magnetic Model), degrees, east positive
-  layers: Object.assign({ constLines: true, constNames: true, starNames: true, dsos: true, sats: true, starlink: false, models3d: true, grid: false, ground: true, below: true, isochrones: true, milkyway: true, realistic: true }, store.get('layers', {})),
+  layers: Object.assign({ constLines: true, constNames: true, starNames: true, dsos: true, sats: true, starlink: false, models3d: true, grid: false, ground: true, below: true, isochrones: false, milkyway: true, realistic: true }, store.get('layers', {})),
   bortle: store.get('bortle', 4),
   bortleAuto: store.get('bortleAuto', true),
 };

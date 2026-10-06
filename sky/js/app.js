@@ -157,6 +157,7 @@ async function boot() {
   const THEMES = ['airy', 'cosmos', 'stargazer', 'terminal'], ICON = { airy: '◐', cosmos: '✦', stargazer: '●', terminal: '▮' };
   $('#themeCycle').onclick = () => { const i = THEMES.indexOf(document.documentElement.dataset.theme); state.manualThisSession = true; applyTheme(THEMES[(i + 1) % 4]); };
   on('theme', t => { $('#themeCycle').textContent = ICON[t] || '◐'; }); $('#themeCycle').textContent = ICON[document.documentElement.dataset.theme] || '◐';
+  if (!store.get('layersV', 0)) { state.layers.isochrones = false; store.set('layers', state.layers); store.set('layersV', 1); } // rise/set time lines now start off (less clutter); one-time
   if (!store.get('declV1', 0)) { const had = state.calOffset; state.calOffset = 0; store.set('calOffset', 0); store.set('declV1', 1); if (Math.abs(had) > .5) setTimeout(() => toast('The compass now corrects to true north automatically, so your old manual alignment was cleared. Use Align if it is still off.', 6000), 2500); }
   bindLocation(); bindTime(); bindSearch(); bindSettings();
   $('#sheetClose').onclick = closeInfo; $('#sheetMin').onclick = toggleInfoMin;

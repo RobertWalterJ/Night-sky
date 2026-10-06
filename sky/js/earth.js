@@ -232,7 +232,9 @@ function frame(ms) {
     if (!v) { el.style.display = 'none'; return; }
     const c = v.clone().project(camera), behind = v.clone().normalize().dot(camera.position.clone().normalize()) < .12 && v.length() < 1.2 && camera.position.length() > 1.5;
     if (c.z > 1 || behind || mode === 'nadir') { el.style.display = 'none'; return; }
-    el.style.display = 'block'; el.textContent = text; el.style.transform = `translate(${(c.x + 1) / 2 * W + 8}px, ${(1 - c.y) / 2 * Hh - 8}px)`;
+    el.style.display = 'block'; el.textContent = text;
+    const x = Math.max(4, Math.min(W - el.offsetWidth - 4, (c.x + 1) / 2 * W + 8)), y = Math.max(4, Math.min(Hh - el.offsetHeight - 4, (1 - c.y) / 2 * Hh - 8)); // keep every label fully on screen
+    el.style.transform = `translate(${x}px, ${y}px)`;
   };
   place(labels.me, me.position, 'You');
   for (const id of [25544, 48274, 20580]) { const it = list.find(x => x.s.norad === id); place(labels[id], it && it.p.x < 1e8 && sel?.norad !== id ? it.p : null, it?.s.name); }
