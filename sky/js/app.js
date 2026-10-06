@@ -12,6 +12,7 @@ import { openInfo, closeInfo, toggleInfoMin } from './info.js';
 import { initFeed, renderFeed, stopFeed } from './feed.js';
 import { initRadio, renderRadio } from './radio.js';
 import { declination } from './wmm.js';
+import { APP_VERSION, BUILD, CHANGELOG } from './version.js';
 import { initLab, renderLab } from './lab.js';
 import { loadGroup, sats } from './sats.js';
 
@@ -132,9 +133,15 @@ function bindSearch() {
 // ---------- settings ----------
 function bindSettings() {
   const dlg = $('#setDialog');
-  $('#settingsBtn').addEventListener('click', () => { // which version of the app is this phone really running?
-    const ver = $('#verLine'); ver.textContent = 'App version: checking...';
-    (window.caches ? caches.keys() : Promise.resolve([])).then(ks => { const k = ks.filter(x => /^nightsky-v\d/.test(x) && !/-data$/.test(x)).sort().pop(); ver.textContent = k ? `App version: ${k.replace('nightsky-', '')}` : 'App version: not installed for offline use yet'; }).catch(() => { ver.textContent = ''; });
+  $('#settingsBtn').addEventListener('click', () => { // which version is this phone running, and is there a newer one?
+    const ver = $('#verLine'); ver.textContent = `Night Sky ${APP_VERSION}, build ${BUILD}. Checking for updates...`;
+    $('#whatsNew').innerHTML = '<b>What\'s new</b>' + CHANGELOG.slice(0, 3).map(c => `<div><b>${esc(c.v)}</b> (${esc(c.date)})<ul>${c.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>`).join('');
+    const running = (window.caches ? caches.keys() : Promise.resolve([])).then(ks => (ks.filter(x => /^nightsky-v\d/.test(x) && !/-data$/.test(x)).sort().pop() || '').replace('nightsky-', ''));
+    const latest = fetch('sw.js?c=' + Date.now(), { cache: 'no-store', signal: AbortSignal.timeout(5000) }).then(r => r.text()).then(t => (t.match(/nightsky-(v\d+-\d+)/) || [])[1] || null).catch(() => null);
+    Promise.all([running, latest]).then(([run, last]) => {
+      const head = `Night Sky ${APP_VERSION}, build ${BUILD}.`;
+      ver.textContent = last && last !== BUILD ? `${head} A newer build (${last}) is available. Close and reopen the app once or twice to update.` : last ? `${head} This is the latest.` : `${head} Could not check for updates (offline?).`;
+    }).catch(() => { ver.textContent = `Night Sky ${APP_VERSION}, build ${BUILD}.`; });
   });
   $('#settingsBtn').addEventListener('click', () => { const c = state.calInfo, mins = c ? Math.round((Date.now() - c.at) / 60000) : 0; $('#alignLine').textContent = c ? `Last aligned ${mins < 2 ? 'just now' : mins < 90 ? mins + ' minutes ago' : Math.round(mins / 60) + ' hours ago'} on ${c.name}, adjusted by ${c.delta > 0 ? '+' : ''}${c.delta}°. Align again whenever things look offset.` : 'Not aligned yet. After this automatic correction, Align on the Moon or a bright planet fixes any small leftover error.';
     $('#declOff').checked = state.declOff; const d = state.declination; $('#declLine').textContent = state.declOff ? 'Automatic true-north correction is OFF (you said your compass already points to true north).' : `Compass is corrected to true north automatically: magnetic declination ${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}° (World Magnetic Model 2025).`; });
@@ -165,6 +172,7 @@ async function boot() {
   on('theme', t => { $('#themeCycle').textContent = ICON[t] || '◐'; }); $('#themeCycle').textContent = ICON[document.documentElement.dataset.theme] || '◐';
   if (!store.get('layersV', 0)) { state.layers.isochrones = false; store.set('layers', state.layers); store.set('layersV', 1); } // rise/set time lines now start off (less clutter); one-time
   if (!store.get('declV1', 0)) { const had = state.calOffset; state.calOffset = 0; store.set('calOffset', 0); store.set('declV1', 1); if (Math.abs(had) > .5) setTimeout(() => toast('The compass now corrects to true north automatically, so your old manual alignment was cleared. Use Align if it is still off.', 6000), 2500); }
+  $('#menuVer').textContent = `Night Sky ${APP_VERSION} (build ${BUILD})`;
   bindLocation(); bindTime(); bindSearch(); bindSettings();
   $('#sheetClose').onclick = closeInfo; $('#sheetMin').onclick = toggleInfoMin;
   $('#sheet').onclick = e => { if (e.target.id === 'sheet') closeInfo(); };

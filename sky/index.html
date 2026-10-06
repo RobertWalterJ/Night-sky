@@ -110,6 +110,7 @@
         <canvas id="arCanvas"></canvas>
         <div class="sky-hud top">
           <div class="hud-dir" id="hudDir">N · 30°</div>
+          <button class="hud-dir hud-mode" id="hudMode" type="button" aria-label="Tap to switch between the magnetic compass and the steady gyroscope" title="Compass or Steady gyroscope"></button>
           <div class="hud-time" id="hudTime"></div>
         </div>
         <div class="sky-search"><input id="skySearch" placeholder="Find Jupiter, Orion, M31, ISS…" autocomplete="off"><div id="searchResults" class="search-results"></div></div>
@@ -335,6 +336,7 @@
     <button class="menu-item" data-go="radio"><i>≋</i><span><b>Radio</b><small>Space ambient, mission audio, local stations</small></span></button>
     <button class="menu-item" data-go="lab"><i>⌕</i><span><b>Lab</b><small>Tools and experiments</small></span></button>
     <p class="menu-label">App</p>
+    <p class="small muted" id="menuVer" style="margin:0 0 6px"></p>
     <a class="menu-item" href="tools/sound-sampler.html"><i>♪</i><span><b>Sound sampler</b><small>Hear early space sounds, pick the one you remember</small></span></a>
     <a class="menu-item" href="tools/sound-spikes.html"><i>♫</i><span><b>Sound test</b><small>10 minute test of how your phone plays sound</small></span></a>
     <button class="menu-item" id="settingsBtn"><i>⚙</i><span><b>Settings</b><small>Clock, compass offset, NASA key</small></span></button>
@@ -358,6 +360,7 @@
     <label>NASA API key <small class="muted">(optional; DEMO_KEY is rate limited)</small><input id="nasaKey" placeholder="DEMO_KEY"></label>
     <p class="small muted" id="dataAge"></p>
     <p class="small muted" id="verLine"></p>
+    <div class="small muted whatsnew" id="whatsNew"></div>
     <p class="small muted" id="declLine"></p>
     <label class="check"><input type="checkbox" id="declOff"> My phone's compass already points to true north (turn off the automatic correction)</label>
     <p class="small muted" id="alignLine"></p>

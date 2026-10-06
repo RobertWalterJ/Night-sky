@@ -9,4 +9,7 @@ for (const f of walk(root)) {
   if (/\.js$/.test(f)) check(rel, fs.readFileSync(f, 'utf8'));
   else if (/\.html$/.test(f)) { const h = fs.readFileSync(f, 'utf8'); for (const m of h.matchAll(/<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g)) if (!/importmap/.test(m[1]) && m[2].trim()) check(rel + ' (inline script)', m[2]); }
 }
+// the version shown in Settings must match the service worker's cache name, or the update check lies
+try { const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8').match(/nightsky-(v\d+-\d+)'/)?.[1], vj = fs.readFileSync(path.join(root, 'js', 'version.js'), 'utf8').match(/BUILD = '([^']+)'/)?.[1];
+  if (sw && vj && sw !== vj) { bad++; console.log(`VERSION MISMATCH: sw.js is ${sw} but sky/js/version.js BUILD is ${vj}. Run: node .github/scripts/bump.mjs <version> "<note>"`); } } catch { }
 console.log(`${n} scripts checked, ${bad} failed`); process.exit(bad ? 1 : 0);

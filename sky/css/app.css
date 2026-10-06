@@ -493,3 +493,6 @@ input[type=checkbox], input[type=radio], input[type=range], progress { accent-co
 .snap-bar { padding: 12px 14px calc(env(safe-area-inset-bottom) + 12px); background: var(--surface-solid); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .snap-bar input { width: 100%; min-height: 48px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); border-radius: 12px; padding: 0 14px; font: inherit; font-size: 1rem; }
 .snap-btns { display: flex; gap: 10px; } .snap-btns .btn { flex: 1; margin: 0; }
+
+.hud-mode { cursor: pointer; color: var(--text); font: inherit; } .hud-mode.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); } .hud-mode:empty { display: none; }
+.whatsnew ul { margin: 2px 0 8px; padding-left: 18px; } .whatsnew li { margin: 2px 0; }

@@ -12,6 +12,7 @@ import { cameraOverlayFov, visibleAngles, eyeViewFov, DEFAULT_CAM_LONG_DEG } fro
 import { visibilityNow, skyNow, pickAlignTarget } from './visibility.js';
 import { composeFrame, initSnap } from './snap.js';
 import { findBlobs, pickBlob, headingCorrection, wrapDeg } from './autoalign.js';
+import { deviceAxes, rotYaw, yawBetween, meanAngle, spread } from './steady.js';
 loadComets();
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -29,8 +30,14 @@ function limAt(t) { const k = ver + ':' + state.bortle + ':' + Math.round(t / 60
 on('location', () => ver++); on('time', () => ver++);
 
 // ---------- shared device orientation ----------
-const orient = { X: null, Y: null, Z: null, listeners: 0, iosOffset: null };
-function onOrient(e) {
+const orient = { X: null, Y: null, Z: null, listeners: 0, iosOffset: null,
+  steady: !!store.get('steady', false), steadyReady: false, steadyYaw: 0, steadyAdjust: 0, absWorld: null, yawSamples: [], steadyTimer: 0 };
+// Steady mode: the phone's plain orientation stream is gyroscope-only on Android Chrome (steady, but with an arbitrary zero), the
+// absolute one uses the magnetic compass (true zero, but it wobbles near metal). One still snapshot from the compass gives the
+// gyroscope its heading; after that only the gyroscope drives the view, and Align locks in the true direction.
+const canSteady = () => 'ondeviceorientationabsolute' in window;
+const setAxes = axes => { orient.X = axes[0]; orient.Y = axes[1]; orient.Z = axes[2]; };
+function onOrient(e) { // the compass stream
   if (e.alpha == null) return;
   let alpha = e.alpha;
   if (e.webkitCompassHeading != null) {
@@ -39,21 +46,52 @@ function onOrient(e) {
     else if (Math.abs(e.beta) < 55) { const d = ((off - orient.iosOffset + 540) % 360) - 180; orient.iosOffset = (orient.iosOffset + d * .05 + 360) % 360; }
     alpha = e.alpha + orient.iosOffset;
   }
-  const a = alpha * D2R, b = e.beta * D2R, g = e.gamma * D2R;
-  const cA = Math.cos(a), sA = Math.sin(a), cB = Math.cos(b), sB = Math.sin(b), cG = Math.cos(g), sG = Math.sin(g);
-  const dl = (state.calOffset + (state.declOff ? 0 : (state.declination || 0))) * D2R, rot = v => [v[0] * Math.cos(dl) + v[1] * Math.sin(dl), -v[0] * Math.sin(dl) + v[1] * Math.cos(dl), v[2]];
-  orient.X = rot([cA * cG - sA * sB * sG, sA * cG + cA * sB * sG, -cB * sG]);
-  orient.Y = rot([-sA * cB, cA * cB, sB]);
-  orient.Z = rot([cA * sG + sA * sB * cG, sA * sG - cA * sB * cG, cB * cG]);
+  const dl = state.calOffset + (state.declOff ? 0 : (state.declination || 0));
+  const axes = deviceAxes(alpha, e.beta, e.gamma).map(v => rotYaw(v, dl));
+  orient.absWorld = axes;
+  if (!(orient.steady && orient.steadyReady)) setAxes(axes);
+}
+function onRel(e) { // the gyroscope stream (only listened to in steady mode)
+  if (!orient.steady || e.alpha == null || e.beta == null) return;
+  const raw = deviceAxes(e.alpha, e.beta, e.gamma);
+  if (!orient.steadyReady) { // calibrate from the compass: needs a still phone, so reject a run of samples that disagree
+    if (!orient.absWorld) return;
+    orient.yawSamples.push(yawBetween(orient.absWorld, raw));
+    if (orient.yawSamples.length >= 10) {
+      const m = meanAngle(orient.yawSamples);
+      if (spread(orient.yawSamples, m) > 8) { orient.yawSamples = []; return; } // the phone was moving: try again
+      orient.steadyYaw = m; orient.steadyAdjust = 0; orient.steadyReady = true; clearTimeout(orient.steadyTimer);
+    }
+    return;
+  }
+  setAxes(raw.map(v => rotYaw(v, orient.steadyYaw + orient.steadyAdjust)));
+}
+let relOn = false;
+const attachRel = () => { if (!relOn) { window.addEventListener('deviceorientation', onRel); relOn = true; } };
+const detachRel = () => { if (relOn) { window.removeEventListener('deviceorientation', onRel); relOn = false; } };
+function beginSteady() {
+  orient.steadyReady = false; orient.yawSamples = []; orient.steadyAdjust = 0; clearTimeout(orient.steadyTimer);
+  orient.steadyTimer = setTimeout(() => { if (orient.steady && !orient.steadyReady) { orient.steady = false; store.set('steady', false); detachRel(); toast('Steady mode could not start. Keep the phone still for a moment when you turn Point on. Using the compass for now.', 7000); } }, 8000);
+}
+function setSteadyMode(on) {
+  if (on && !canSteady()) { toast('Steady mode needs Android Chrome. This phone will keep using the compass.', 6000); return false; }
+  orient.steady = !!on; store.set('steady', orient.steady);
+  if (on) { beginSteady(); if (orient.listeners > 0) attachRel(); } else { detachRel(); clearTimeout(orient.steadyTimer); orient.steadyReady = false; }
+  return orient.steady;
+}
+// An Align (from the picture or on a known object) corrects the heading: in steady mode it adjusts the gyroscope heading, otherwise the compass offset.
+function applyHeadingDelta(delta) {
+  if (orient.steady && orient.steadyReady) orient.steadyAdjust = wrapDeg(orient.steadyAdjust + delta);
+  else { state.calOffset = wrapDeg(state.calOffset + delta); store.set('calOffset', state.calOffset); }
 }
 const evName = () => 'ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation';
 async function startOrientation() {
   try { if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) { if (await DeviceOrientationEvent.requestPermission() !== 'granted') throw 0; } }
   catch { toast('Motion access was not granted'); return false; }
-  if (!orient.listeners++) window.addEventListener(evName(), onOrient);
+  if (!orient.listeners++) { window.addEventListener(evName(), onOrient); if (orient.steady && canSteady()) { beginSteady(); attachRel(); } }
   return true;
 }
-function stopOrientation() { if (orient.listeners > 0 && !--orient.listeners) window.removeEventListener(evName(), onOrient); }
+function stopOrientation() { if (orient.listeners > 0 && !--orient.listeners) { window.removeEventListener(evName(), onOrient); detachRel(); orient.steadyReady = false; } }
 
 // ---------- colours ----------
 let colors = null;
@@ -379,6 +417,7 @@ export function createSky(cv, cfg = {}) {
       const { az, alt } = altAzFromEnu(B.f);
       cfg.hud.dir.textContent = `${compass(az)} ${Math.round(az)}° · alt ${Math.round(alt)}° · ${Math.round(V.fov)}°`;
       cfg.hud.time.textContent = (state.offsetMin ? '⟲ ' : '● ') + fmtTime(t, !!state.offsetMin);
+      if (cfg.hud.mode) { const m = cfg.hud.mode, txt = orient.steady ? (orient.steadyReady ? 'Steady' : 'Steady…') : 'Compass'; if (m.textContent !== txt) m.textContent = txt; m.classList.toggle('on', orient.steady && orient.steadyReady); }
     }
     cfg.onDraw?.({ lim, t });
   }
@@ -636,6 +675,12 @@ export function createSky(cv, cfg = {}) {
     stream: null,
     // one frame of what the camera sees with the sky overlay on top, laid out as on screen (null if the camera is off)
     capture() { if (!V.camera || !measure() || !cfg.video?.videoWidth) return null; return composeFrame({ video: cfg.video, overlays: [cv, cfg.ar], W, H }); },
+    // where the phone is pointing right now (after refreshing the view), and a manual heading correction in degrees
+    viewDir() { setup(); const aa = altAzFromEnu(B.f); return { az: aa.az, alt: aa.alt }; },
+    nudgeHeading(deg) { applyHeadingDelta(deg); },
+    get steady() { return orient.steady; },
+    get steadyReady() { return orient.steadyReady; },
+    setSteady(on) { sm = null; const r = setSteadyMode(on); dirty = true; return r; },
     get camLong() { return camLong; },
     setCamLong(deg) { camLong = clamp(+deg || DEFAULT_CAM_LONG_DEG, 40, 110); store.set('camFovLong', camLong); fitCamera(); return camLong; },
     // "Match my eyes": make the screen cover the same patch of sky it would if it were a window held at half an arm's length
@@ -672,7 +717,7 @@ export function createSky(cv, cfg = {}) {
       if (!best) { toast('The Sun or Moon is not in the part of the sky you are facing. Turn towards it, then tap Align.', 6000); return 'none'; }
       const d = unproject(best.blob.x * W / sw, best.blob.y * H / sh, [0, 0, 0]), cor = headingCorrection(best.b.v, d);
       if (Math.abs(cor.yaw) > 45) { toast(`The ${best.b.name} in the picture is ${Math.abs(cor.yaw).toFixed(0)}° from where the app expects it. That is too far to trust, so nothing was changed.`, 7000); return 'none'; }
-      state.calOffset = wrapDeg(state.calOffset + cor.yaw); store.set('calOffset', state.calOffset);
+      applyHeadingDelta(cor.yaw);
       state.calInfo = { at: Date.now(), name: `the ${best.b.name} (from the picture)`, delta: +cor.yaw.toFixed(1) }; store.set('calInfo', state.calInfo);
       emit('calibrated', state.calOffset); dirty = true;
       const tilt = Math.abs(cor.pitch) > 3 ? ` Your phone's tilt also reads about ${Math.abs(cor.pitch).toFixed(0)}° ${cor.pitch > 0 ? 'low' : 'high'}.` : '';
@@ -700,7 +745,7 @@ export function createSky(cv, cfg = {}) {
       for (const c of cands) { const d = Math.acos(clamp(dot(c.v, B.f), -1, 1)); if (d < bd) { bd = d; best = c; } }
       if (!best || bd > 35 * D2R) { toast('No bright object near the crosshair'); return; }
       const tgt = altAzFromEnu(best.v), cur = altAzFromEnu(B.f), delta = ((tgt.az - cur.az + 540) % 360) - 180;
-      state.calOffset = (((state.calOffset + delta) + 540) % 360) - 180; store.set('calOffset', state.calOffset);
+      applyHeadingDelta(delta);
       state.calInfo = { at: Date.now(), name: best.name, delta: +delta.toFixed(1) }; store.set('calInfo', state.calInfo);
       emit('calibrated', state.calOffset); toast(`Aligned on ${best.name} (${delta > 0 ? '+' : ''}${delta.toFixed(1)}°)`);
       dirty = true;
@@ -713,11 +758,16 @@ export function createSky(cv, cfg = {}) {
 export let sky = null;
 export function initSky() {
   loadMilkyWay().then(() => sky?.invalidate());
-  sky = createSky(document.getElementById('skyCanvas'), { aim: document.getElementById('aimHud'), find: document.getElementById('findHud'), ar: document.getElementById('arCanvas'), video: document.getElementById('camVideo'), hud: { dir: document.getElementById('hudDir'), time: document.getElementById('hudTime') } });
+  sky = createSky(document.getElementById('skyCanvas'), { aim: document.getElementById('aimHud'), find: document.getElementById('findHud'), ar: document.getElementById('arCanvas'), video: document.getElementById('camVideo'), hud: { dir: document.getElementById('hudDir'), time: document.getElementById('hudTime'), mode: document.getElementById('hudMode') } });
   const $ = id => document.getElementById(id);
   $('btnSensor').onclick = async () => { await sky.toggleSensor(); $('btnSensor').classList.toggle('on', sky.V.sensor); };
   $('btnCamera').onclick = async () => { await sky.toggleCamera(); $('btnFov').hidden = !sky.V.camera; $('btnSnap').hidden = !sky.V.camera; if (!sky.V.camera) { $('fovPanel').hidden = true; $('btnFov').classList.remove('on'); } $('skyWrap').classList.toggle('cam', sky.V.camera); $('btnCamera').classList.toggle('on', sky.V.camera); $('btnSensor').classList.toggle('on', sky.V.sensor); };
   $('btnAlign').onclick = () => { const r = sky.align(); $('btnAlign').classList.toggle('on', r === 'armed'); };
+  $('hudMode').onclick = () => {
+    const on = !sky.steady, r = sky.setSteady(on);
+    if (on && r) toast(sky.V.sensor ? 'Steady mode: keep the phone still for a second while it starts. It then follows the phone\'s gyroscope, not the magnetic compass. Put the Sun or Moon in the camera and tap Align to lock the direction in. Re-align every 10 minutes or so.' : 'Steady mode will start when you turn Point on. Keep the phone still for a second.', 9000);
+    else if (!on) toast('Back to the magnetic compass. It can drift near metal, so use Align when you can.', 5000);
+  };
   $('btnEye').onclick = () => { const on_ = sky.eyeView(); $('btnEye').classList.toggle('on', on_); };
   const snap = initSnap({ capture: () => sky.capture(), info: () => { const aa = altAzFromEnu(sky.basis.f); return { az: aa.az, alt: aa.alt, selected: sky.getSelected()?.name || '' }; } });
   $('btnSnap').onclick = () => snap?.open();
