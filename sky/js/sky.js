@@ -10,6 +10,7 @@ import { comets, cometState, loadComets } from './comets.js';
 import { radecVec } from './astro.js';
 import { cameraOverlayFov, visibleAngles, eyeViewFov, DEFAULT_CAM_LONG_DEG } from './camfov.js';
 import { visibilityNow, skyNow, pickAlignTarget } from './visibility.js';
+import { composeFrame, initSnap } from './snap.js';
 loadComets();
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -631,6 +632,8 @@ export function createSky(cv, cfg = {}) {
       dirty = true; return V.follow;
     },
     stream: null,
+    // one frame of what the camera sees with the sky overlay on top, laid out as on screen (null if the camera is off)
+    capture() { if (!V.camera || !measure() || !cfg.video?.videoWidth) return null; return composeFrame({ video: cfg.video, overlays: [cv, cfg.ar], W, H }); },
     get camLong() { return camLong; },
     setCamLong(deg) { camLong = clamp(+deg || DEFAULT_CAM_LONG_DEG, 40, 110); store.set('camFovLong', camLong); fitCamera(); return camLong; },
     // "Match my eyes": make the screen cover the same patch of sky it would if it were a window held at half an arm's length
@@ -685,9 +688,11 @@ export function initSky() {
   sky = createSky(document.getElementById('skyCanvas'), { aim: document.getElementById('aimHud'), find: document.getElementById('findHud'), ar: document.getElementById('arCanvas'), video: document.getElementById('camVideo'), hud: { dir: document.getElementById('hudDir'), time: document.getElementById('hudTime') } });
   const $ = id => document.getElementById(id);
   $('btnSensor').onclick = async () => { await sky.toggleSensor(); $('btnSensor').classList.toggle('on', sky.V.sensor); };
-  $('btnCamera').onclick = async () => { await sky.toggleCamera(); $('btnFov').hidden = !sky.V.camera; if (!sky.V.camera) { $('fovPanel').hidden = true; $('btnFov').classList.remove('on'); } $('skyWrap').classList.toggle('cam', sky.V.camera); $('btnCamera').classList.toggle('on', sky.V.camera); $('btnSensor').classList.toggle('on', sky.V.sensor); };
+  $('btnCamera').onclick = async () => { await sky.toggleCamera(); $('btnFov').hidden = !sky.V.camera; $('btnSnap').hidden = !sky.V.camera; if (!sky.V.camera) { $('fovPanel').hidden = true; $('btnFov').classList.remove('on'); } $('skyWrap').classList.toggle('cam', sky.V.camera); $('btnCamera').classList.toggle('on', sky.V.camera); $('btnSensor').classList.toggle('on', sky.V.sensor); };
   $('btnAlign').onclick = () => { const r = sky.align(); $('btnAlign').classList.toggle('on', r === 'armed'); };
   $('btnEye').onclick = () => { const on_ = sky.eyeView(); $('btnEye').classList.toggle('on', on_); };
+  const snap = initSnap({ capture: () => sky.capture(), info: () => { const aa = altAzFromEnu(sky.basis.f); return { az: aa.az, alt: aa.alt, selected: sky.getSelected()?.name || '' }; } });
+  $('btnSnap').onclick = () => snap?.open();
   // camera field of view fit: only offered while the camera is on
   const fp = $('fovPanel'), fs = $('fovSlider'), fv = $('fovVal');
   const showFov = () => { fs.value = Math.round(sky.camLong); fv.textContent = `${Math.round(sky.camLong)}°`; };

@@ -483,3 +483,13 @@ input[type=checkbox], input[type=radio], input[type=range], progress { accent-co
 .aim-hud .av { font-size: .95rem; font-weight: 600; line-height: 1.35; margin-top: 2px; }
 .aim-hud .av[hidden] { display: none; }
 .aim-hud .av[data-level="yes"] { color: var(--good); } .aim-hud .av[data-level="no"] { color: var(--muted); } .aim-hud .av[data-level="maybe"], .aim-hud .av[data-level="binoculars"] { color: var(--ok); }
+
+/* Snap: frozen camera view */
+.snap { position: fixed; inset: 0; z-index: 70; background: #000; display: flex; flex-direction: column; }
+.snap[hidden] { display: none; }
+.snap img { flex: 1; min-height: 0; width: 100%; object-fit: contain; background: #000; }
+[data-theme="stargazer"] #snapImg { filter: grayscale(1) sepia(1) saturate(6) hue-rotate(-40deg) brightness(.75); }
+[data-theme="terminal"] #snapImg { filter: grayscale(1) sepia(1) saturate(4) hue-rotate(70deg) brightness(.85) contrast(1.2); }
+.snap-bar { padding: 12px 14px calc(env(safe-area-inset-bottom) + 12px); background: var(--surface-solid); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.snap-bar input { width: 100%; min-height: 48px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); border-radius: 12px; padding: 0 14px; font: inherit; font-size: 1rem; }
+.snap-btns { display: flex; gap: 10px; } .snap-btns .btn { flex: 1; margin: 0; }

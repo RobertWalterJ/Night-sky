@@ -123,6 +123,7 @@
           <button id="btnSensor" class="tool" title="Point your phone at the sky"><b>⌖</b><span>Point</span></button>
           <button id="btnCamera" class="tool" title="Camera overlay"><b>◉</b><span>Camera</span></button>
           <button id="btnAlign" class="tool" title="Align compass on a known object"><b>⊕</b><span>Align</span></button>
+          <button id="btnSnap" class="tool" title="Freeze this view to share or save" hidden><b>▣</b><span>Snap</span></button>
           <button id="btnFov" class="tool" title="Fit the camera field of view" hidden><b>↔</b><span>Fit</span></button>
           <button id="btnEye" class="tool" title="Match my eyes: the screen covers the same sky as it would held at half an arm's length"><b>◔</b><span>Eyes</span></button>
           <button id="btnLayers" class="tool" title="Layers"><b>≡</b><span>Layers</span></button>
@@ -363,6 +364,13 @@
     <div class="row end"><button class="btn">Done</button></div>
   </form>
 </dialog>
+<div class="snap" id="snapView" hidden>
+  <img id="snapImg" alt="Your frozen sky view">
+  <div class="snap-bar">
+    <input id="snapCaption" placeholder="Add a note (optional)" maxlength="80" aria-label="Note on the picture">
+    <div class="snap-btns"><button class="btn big" id="snapShare" type="button">Share</button><button class="btn ghost big" id="snapSave" type="button">Save</button><button class="btn ghost big" id="snapBack" type="button">Back</button></div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 <script type="module" src="js/app.js"></script>
 </body>
