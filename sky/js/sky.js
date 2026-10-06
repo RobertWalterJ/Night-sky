@@ -77,8 +77,9 @@ export function createSky(cv, cfg = {}) {
   const off = { sky: document.createElement('canvas'), gnd: document.createElement('canvas') };
   // camera: the overlay must use the camera's REAL field of view or markers drift towards the middle (see camfov.js)
   let camLong = +store.get('camFovLong', DEFAULT_CAM_LONG_DEG) || DEFAULT_CAM_LONG_DEG, fovBeforeCam = null, fovBeforeEye = null, eyeOn = false;
+  const measure = () => { if (!W || !H) { const r = cv.getBoundingClientRect(); W = r.width; H = r.height; } return W > 0 && H > 0; }; // do not depend on the resize observer having fired yet
   function fitCamera() {
-    if (!V.camera) return; const v = cfg.video; if (!v) return;
+    if (!V.camera) return; const v = cfg.video; if (!v || !measure()) return;
     const f = cameraOverlayFov(v.videoWidth, v.videoHeight, W, H, camLong); if (f) V.fov = clamp(f, 10, 110);
     dirty = true; emit('camfov', { long: camLong, fov: V.fov, ...(W && H ? visibleAngles(V.fov, W, H) : {}) });
   }
@@ -631,6 +632,7 @@ export function createSky(cv, cfg = {}) {
     // "Match my eyes": make the screen cover the same patch of sky it would if it were a window held at half an arm's length
     eyeView() {
       if (V.camera) { toast('Eye view is for when the camera is off'); return false; }
+      if (!measure()) return false;
       if (!eyeOn) { fovBeforeEye = V.fov; V.fov = clamp(eyeViewFov(Math.min(W, H)), 3, 60); eyeOn = true; const a = visibleAngles(V.fov, W, H); toast(`Eye view: the screen covers about ${Math.round(a.across)} degrees across and ${Math.round(a.along)} tall, like a window at half an arm's length (a fist is about 10)`, 6000); }
       else { V.fov = fovBeforeEye || 60; eyeOn = false; }
       dirty = true; return eyeOn;

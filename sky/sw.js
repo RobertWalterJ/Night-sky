@@ -1,5 +1,5 @@
 // Offline support: app shell + catalogue + models are cached; live data is network-first with cache fallback
-const VERSION = 'nightsky-v5-28';
+const VERSION = 'nightsky-v5-29';
 const PREFIX = 'nightsky-'; // all apps share one origin: only ever touch our own caches
 const SHELL = [
   './', 'index.html', 'css/app.css',
