@@ -165,8 +165,8 @@ async function boot() {
 
   const saved = store.get('loc');
   if (saved) { Object.assign(state, saved); $('#locName').textContent = saved.name; }
-  state.declination = declination(state.lat, state.lon, (state.elev || 0) / 1000, new Date()); // also for the restored or default place, not only after a location change
   else $('#locName').textContent = state.name;
+  state.declination = declination(state.lat, state.lon, (state.elev || 0) / 1000, new Date()); // also for the restored or default place, not only after a location change
 
   await loadCatalog();
   autoTheme(); setInterval(autoTheme, 5 * 60000);
