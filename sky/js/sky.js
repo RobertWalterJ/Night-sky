@@ -658,6 +658,7 @@ export function createSky(cv, cfg = {}) {
     // where it really is with where the sky model says it should be.
     alignFromPicture() {
       const v = cfg.video; if (!V.camera || !v || !v.videoWidth || !measure()) return null;
+      setup(); // bring the view's centre, scale and basis up to date, whether or not a frame has just been drawn
       const t = now(), sc = .25, sw = Math.max(32, Math.round(W * sc)), sh = Math.max(32, Math.round(H * sc));
       const c = document.createElement('canvas'); c.width = sw; c.height = sh; const g = c.getContext('2d', { willReadFrequently: true });
       const vw = v.videoWidth, vh = v.videoHeight, k = Math.max(sw / vw, sh / vh); g.drawImage(v, (sw - vw * k) / 2, (sh - vh * k) / 2, vw * k, vh * k);
