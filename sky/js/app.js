@@ -132,6 +132,10 @@ function bindSearch() {
 // ---------- settings ----------
 function bindSettings() {
   const dlg = $('#setDialog');
+  $('#settingsBtn').addEventListener('click', () => { // which version of the app is this phone really running?
+    const ver = $('#verLine'); ver.textContent = 'App version: checking...';
+    (window.caches ? caches.keys() : Promise.resolve([])).then(ks => { const k = ks.filter(x => /^nightsky-v\d/.test(x) && !/-data$/.test(x)).sort().pop(); ver.textContent = k ? `App version: ${k.replace('nightsky-', '')}` : 'App version: not installed for offline use yet'; }).catch(() => { ver.textContent = ''; });
+  });
   $('#settingsBtn').addEventListener('click', () => { const c = state.calInfo, mins = c ? Math.round((Date.now() - c.at) / 60000) : 0; $('#alignLine').textContent = c ? `Last aligned ${mins < 2 ? 'just now' : mins < 90 ? mins + ' minutes ago' : Math.round(mins / 60) + ' hours ago'} on ${c.name}, adjusted by ${c.delta > 0 ? '+' : ''}${c.delta}°. Align again whenever things look offset.` : 'Not aligned yet. After this automatic correction, Align on the Moon or a bright planet fixes any small leftover error.';
     $('#declOff').checked = state.declOff; const d = state.declination; $('#declLine').textContent = state.declOff ? 'Automatic true-north correction is OFF (you said your compass already points to true north).' : `Compass is corrected to true north automatically: magnetic declination ${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}° (World Magnetic Model 2025).`; });
   $('#settingsBtn').onclick = () => { $('#autoNight').checked = state.autoNight; $('#use24').checked = state.use24; $('#nasaKey').value = state.nasaKey; $('#calOffset').textContent = `${state.calOffset.toFixed(1)}°`; dlg.showModal(); };
