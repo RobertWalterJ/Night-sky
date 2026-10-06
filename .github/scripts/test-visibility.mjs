@@ -16,14 +16,23 @@ ok(canSee({ kind: 'planet', mag: -2.4, alt: 40 }, { lim: -1, sunAlt: 20, nextDar
 ok(canSee({ kind: 'star', mag: 1, alt: 40 }, { lim: 1.5, sunAlt: -3 }).level === 'no', 'bright star in bright twilight: sky still too bright');
 const low = canSee({ kind: 'planet', mag: 0.8, alt: 5 }, dark); ok(low.level === 'yes' && /low/.test(low.text), 'a bright planet very low: still visible, with a haze warning');
 ok(canSee({ kind: 'sat', mag: 3, alt: 40, lit: false }, dark).level === 'no', 'a satellite in the Earth shadow: no');
-ok(canSee({ kind: 'moon', alt: 30 }, dark).level === 'yes', 'the Moon above the horizon: yes');
+ok(canSee({ kind: 'moon', alt: 30 }, dark).level === 'yes', 'the Moon above the horizon at night: yes');
+const noon = { lim: -1, sunAlt: 41 };
+ok(canSee({ kind: 'moon', alt: 43, illum: .17, sepSun: 49 }, noon).level === 'maybe', 'your case: a 17% crescent at noon, 49 degrees from the Sun: maybe, not a plain yes');
+ok(/17%/.test(canSee({ kind: 'moon', alt: 43, illum: .17, sepSun: 49 }, noon).text), 'the answer says how much of the Moon is lit');
+ok(canSee({ kind: 'moon', alt: 43, illum: .06, sepSun: 30 }, noon).level === 'no', 'a 6% sliver in daylight: no');
+ok(canSee({ kind: 'moon', alt: 43, illum: .6, sepSun: 100 }, noon).level === 'yes', 'a 60% Moon in daylight: yes');
+ok(canSee({ kind: 'moon', alt: 20, illum: .5, sepSun: 12 }, noon).level === 'no', 'a Moon within 20 degrees of the Sun: no');
+ok(canSee({ kind: 'moon', alt: 20, illum: .17, sepSun: 60 }, { lim: 2, sunAlt: -3 }).level === 'yes', 'the same crescent at dusk: yes');
+ok(canSee({ kind: 'moon', alt: 20, illum: .17, sepSun: 60 }, dark).level === 'yes', 'the same crescent in a dark sky: yes');
 ok(canSee({ kind: 'const', alt: 30 }, dark) === null, 'constellations: nothing to say');
 // align target
 const moon = { kind: 'moon', name: 'Moon', alt: 20, mag: -10, illum: .5 }, jup = { kind: 'planet', name: 'Jupiter', alt: 35, mag: -2.3 }, sat = { kind: 'planet', name: 'Saturn', alt: 25, mag: .9 }, vega = { kind: 'star', name: 'Vega', alt: 70, mag: 0 }, arc = { kind: 'star', name: 'Arcturus', alt: 30, mag: -.05 };
 ok(pickAlignTarget([jup, moon, vega], dark).name === 'Moon', 'align: the Moon when it is up');
 ok(pickAlignTarget([jup, sat, vega], dark).name === 'Jupiter', 'align: the brightest planet when there is no Moon');
 ok(pickAlignTarget([vega, arc], dark).name === 'Arcturus', 'align: the brightest star when there is no planet');
-ok(pickAlignTarget([{ ...moon, illum: .02 }, vega], dark).name === 'Vega', 'align: a hair-thin Moon is skipped');
+ok(pickAlignTarget([{ ...moon, illum: .01 }, vega], dark).name === 'Vega', 'align: a hair-thin Moon is skipped');
+ok(pickAlignTarget([{ ...moon, illum: .17, sepSun: 49 }, { ...jup, mag: -2.3 }], { lim: -1, sunAlt: 41 }) === null, 'align: a crescent Moon in daylight is NOT suggested (this was the bug)');
 ok(pickAlignTarget([{ ...jup, alt: 6 }], dark) === null, 'align: nothing above 10 degrees means no suggestion');
 ok(pickAlignTarget([jup, vega], { lim: -1, sunAlt: 20 }) === null, 'align: in daylight with no Moon there is no suggestion');
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

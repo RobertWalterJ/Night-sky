@@ -7,14 +7,23 @@ export const airMass = altDeg => 1 / Math.sin((altDeg + 244 / (165 + 47 * Math.p
 const K = 0.22;        // magnitudes lost per air mass in clear air (a typical value, so low objects are dimmer)
 const BINOC_GAIN = 3;  // how many magnitudes fainter 10x50 binoculars reach, roughly
 
-// o: { kind, mag, alt, lit?, extended? }   sky: { lim (naked-eye limit, mag), sunAlt (deg), nextDark? (text) }
+// o: { kind, mag, alt, lit?, extended?, illum? (Moon, 0 to 1), sepSun? (Moon, degrees from the Sun) }   sky: { lim (naked-eye limit, mag), sunAlt (deg), nextDark? (text) }
 // Returns { level: 'yes' | 'maybe' | 'binoculars' | 'no', text }, or null when there is nothing sensible to say.
 export function canSee(o, sky) {
   const { kind, mag, alt } = o;
   if (alt == null) return null;
   if (alt < 0) return { level: 'no', text: 'No: it is below the horizon right now' };
   if (kind === 'sun') return { level: 'yes', text: 'Yes, but never look at the Sun without a proper solar filter' };
-  if (kind === 'moon') return { level: 'yes', text: alt < 8 ? 'Yes, the Moon is easy to see, low in the sky' : 'Yes, the Moon is easy to see' };
+  if (kind === 'moon') {
+    // The Moon is bright but its glow is spread out, so a thin crescent vanishes in a bright sky. Phase, the Sun's height and how close it is to the Sun decide.
+    const il = o.illum ?? 1, sep = o.sepSun ?? 90, pct = Math.round(il * 100), sunUp = sky.sunAlt > 0;
+    if (sunUp && sep < 20) return { level: 'no', text: 'No: the Moon is too close to the Sun to see' };
+    if (!sunUp && sky.sunAlt > -6) return il > .03 ? { level: 'yes', text: `Yes, twilight is a good time to look for the Moon (${pct}% lit)` } : { level: 'maybe', text: 'Maybe: it is a very thin sliver' };
+    if (!sunUp) return il > .02 ? { level: 'yes', text: alt < 8 ? 'Yes, the Moon is easy to see, low in the sky' : 'Yes, the Moon is easy to see' } : { level: 'maybe', text: 'Maybe: it is a very thin sliver' };
+    if (il >= .45) return { level: 'yes', text: `Yes: a ${pct}% lit Moon shows up as a pale shape in daylight` };
+    if (il >= .12) return { level: 'maybe', text: `Maybe: only ${pct}% is lit, so it is faint against a daytime sky. It is easiest on a clear, deep blue sky, away from the Sun. Look carefully, or wait for dusk` };
+    return { level: 'no', text: `No: only ${pct}% is lit, too thin to find in daylight. Try after dusk` };
+  }
   if (kind === 'sat' && o.lit === false) return { level: 'no', text: "No: it is in the Earth's shadow, so it cannot reflect sunlight" };
   if (kind === 'const') return null;
   if (mag == null || isNaN(mag)) return null;
@@ -34,7 +43,7 @@ export function canSee(o, sky) {
 // Best thing to align the compass on right now, in the order a person can actually find it.
 // cands: [{ kind, name, mag, alt, illum? }] already above the horizon. Returns one or null.
 export function pickAlignTarget(cands, sky) {
-  const moon = cands.find(c => c.kind === 'moon' && c.alt > 5 && (c.illum ?? 1) > 0.08);
+  const moon = cands.find(c => c.kind === 'moon' && c.alt > 5 && canSee(c, sky)?.level === 'yes');
   if (moon) return moon;
   const score = c => c.mag - Math.min(c.alt, 40) * .01; // brighter first, a little credit for being higher
   const planets = cands.filter(c => c.kind === 'planet' && c.alt > 10 && c.mag < 2.2 && canSee(c, sky)?.level === 'yes').sort((a, b) => score(a) - score(b));

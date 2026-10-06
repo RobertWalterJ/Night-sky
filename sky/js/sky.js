@@ -508,7 +508,8 @@ export function createSky(cv, cfg = {}) {
     if (o) {
       el.querySelector('.an').textContent = o.name || o.id;
       el.querySelector('.ad').textContent = [KIND[o.kind] || '', brightWords(o), con && o.kind !== 'const' ? `in ${con}` : '', `${Math.round(aa.alt)}° up, ${compass(aa.az)}`].filter(Boolean).join(' · ');
-      const vz = visibilityNow({ kind: o.kind, mag: o.mag ?? o.m, alt: aa.alt, lit: o.lit, extended: o.kind === 'dso' }, t), av = el.querySelector('.av');
+      const sunB = o.kind === 'moon' ? solAt(t).find(b => b.kind === 'sun') : null, sepSun = sunB && o.v ? Math.acos(clamp(dot(o.v, sunB.v), -1, 1)) * R2D : undefined;
+      const vz = visibilityNow({ kind: o.kind, mag: o.mag ?? o.m, alt: aa.alt, lit: o.lit, extended: o.kind === 'dso', illum: o.illum, sepSun }, t), av = el.querySelector('.av');
       av.textContent = vz ? (vz.level === 'yes' ? '✓ ' : vz.level === 'no' ? '✕ ' : '~ ') + vz.text : ''; av.hidden = !vz; av.dataset.level = vz ? vz.level : '';
     } else {
       el.querySelector('.an').textContent = 'Nothing named here';
@@ -684,11 +685,12 @@ export function createSky(cv, cfg = {}) {
       if (!V.aligning) {
         V.aligning = true; dirty = true;
         const t0 = now(), toEnu0 = eqjToEnuFn(t0), list = [];
-        for (const b of solAt(t0)) { if (b.kind === 'sun' || b.v[2] <= 0) continue; list.push({ kind: b.kind, name: b.name, mag: b.mag, illum: b.illum, alt: altAzFromEnu(b.v).alt, az: altAzFromEnu(b.v).az, obj: b }); }
+        const all0 = solAt(t0), sun0 = all0.find(b => b.kind === 'sun');
+        for (const b of all0) { if (b.kind === 'sun' || b.v[2] <= 0) continue; list.push({ kind: b.kind, name: b.name, mag: b.mag, illum: b.illum, sepSun: sun0 ? Math.acos(clamp(dot(b.v, sun0.v), -1, 1)) * R2D : undefined, alt: altAzFromEnu(b.v).alt, az: altAzFromEnu(b.v).az, obj: b }); }
         for (let i = 0; i < cat.n; i++) if (cat.mag[i] < 1.6) { const e = toEnu0(cat.vec[i * 3], cat.vec[i * 3 + 1], cat.vec[i * 3 + 2]); if (e[2] > 0) { const aa = altAzFromEnu(e); list.push({ kind: 'star', name: cat.names[cat.id[i]]?.[0] || 'a bright star', mag: cat.mag[i], alt: aa.alt, az: aa.az, idx: i }); } }
         const pick = pickAlignTarget(list, skyNow(t0));
         if (pick) { selected = pick.obj || starInfo(pick.idx); track = null; toast(`Best to align on now: ${pick.name}, ${Math.round(pick.alt)}° up in the ${compass(pick.az)}. The arrow will guide you. When it is in the crosshair, tap Align again.`, 8000); }
-        else toast('Nothing bright is up to align on right now. Use the Moon, a bright planet or a bright star once it is dark enough, then tap Align again.', 7000);
+        else toast(sun0 && sun0.v[2] > 0 ? 'In daylight the Sun is the one thing to align on. Turn the camera on so the Sun is in the picture (do not look at it), then tap Align.' : 'Nothing bright is up to align on right now. Use the Moon, a bright planet or a bright star once it is dark enough, then tap Align again.', 8000);
         return 'armed';
       }
       V.aligning = false;

@@ -42,7 +42,8 @@ async function openInfoCore(o) {
       ['Magnitude', il ? il.mag.toFixed(2) : null], ['Distance', o.kind === 'moon' ? `${Math.round(distKm).toLocaleString()} km` : `${h.dist.toFixed(3)} AU (${(distKm / 1e6).toFixed(0)} M km)`],
       ['Rises', fmtTime(riseSet(o.id, t, +1), true)], ['Transits', fmtTime(transit(o.id, t), true)], ['Sets', fmtTime(riseSet(o.id, t, -1), true)],
       ['Diameter', F?.d], ...(F?.facts || [])];
-    vis = visibilityNow({ kind: o.kind, mag: il ? il.mag : null, alt: h.alt }, t);
+    let sepSun; if (o.kind === 'moon') { const sh = bodyHorizontal('Sun', t), d2r = Math.PI / 180, vv = (az, al) => [Math.sin(az * d2r) * Math.cos(al * d2r), Math.cos(az * d2r) * Math.cos(al * d2r), Math.sin(al * d2r)], a1 = vv(h.az, h.alt), a2 = vv(sh.az, sh.alt); sepSun = Math.acos(Math.max(-1, Math.min(1, a1[0] * a2[0] + a1[1] * a2[1] + a1[2] * a2[2]))) / d2r; }
+    vis = visibilityNow({ kind: o.kind, mag: il ? il.mag : null, alt: h.alt, illum: il ? il.phase_fraction : undefined, sepSun }, t);
     if (o.kind === 'moon') { const mi = moonInfo(t); phase = mi.phaseAngle; rows.splice(3, 0, ['Phase', `${mi.name}, ${Math.round(mi.illum * 100)}% lit`], ['Age', `${mi.age.toFixed(1)} days`]); }
     if (o.kind === 'planet' && il) rows.splice(4, 0, ['Illuminated', `${Math.round(il.phase_fraction * 100)}%`]);
     model = F?.model; wiki = o.kind === 'planet' && o.id === 'Mercury' ? ['Mercury (planet)'] : [o.id];
