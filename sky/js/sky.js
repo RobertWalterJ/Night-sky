@@ -8,6 +8,7 @@ import { cat, eqjToEnuFn, enuToEqjFn, solarSystem, enuFromAltAz, altAzFromEnu, e
 import { visibleSats, satPosition } from './sats.js';
 import { comets, cometState, loadComets } from './comets.js';
 import { radecVec } from './astro.js';
+import { cameraOverlayFov, visibleAngles, eyeViewFov, DEFAULT_CAM_LONG_DEG } from './camfov.js';
 loadComets();
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -74,8 +75,15 @@ export function createSky(cv, cfg = {}) {
   let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, F = 1, R = 0, rect = true, active = false, dirty = true;
   let hits = [], selected = null, track = null, sm = null, lastTick = 0, arMod = null, arLoading = false;
   const off = { sky: document.createElement('canvas'), gnd: document.createElement('canvas') };
+  // camera: the overlay must use the camera's REAL field of view or markers drift towards the middle (see camfov.js)
+  let camLong = +store.get('camFovLong', DEFAULT_CAM_LONG_DEG) || DEFAULT_CAM_LONG_DEG, fovBeforeCam = null, fovBeforeEye = null, eyeOn = false;
+  function fitCamera() {
+    if (!V.camera) return; const v = cfg.video; if (!v) return;
+    const f = cameraOverlayFov(v.videoWidth, v.videoHeight, W, H, camLong); if (f) V.fov = clamp(f, 10, 110);
+    dirty = true; emit('camfov', { long: camLong, fov: V.fov, ...(W && H ? visibleAngles(V.fov, W, H) : {}) });
+  }
 
-  new ResizeObserver(() => { const r = cv.getBoundingClientRect(); DPR = Math.min(devicePixelRatio || 1, mini ? 1.5 : 2); W = r.width; H = r.height; cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); arMod?.resize(W, H, DPR); dirty = true; }).observe(cv);
+  new ResizeObserver(() => { const r = cv.getBoundingClientRect(); DPR = Math.min(devicePixelRatio || 1, mini ? 1.5 : 2); W = r.width; H = r.height; cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); arMod?.resize(W, H, DPR); if (V.camera) fitCamera(); dirty = true; }).observe(cv);
   on('theme', () => dirty = true); on('time', () => dirty = true); on('location', () => dirty = true); on('layers', () => dirty = true);
 
   // ---------- projection ----------
@@ -575,7 +583,7 @@ export function createSky(cv, cfg = {}) {
     cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); moved = false; const r = cv.getBoundingClientRect(); start = { x: e.clientX, y: e.clientY, az: V.az, alt: V.alt, hd: V.heading, a0: Math.atan2(e.clientY - r.top - cy, e.clientX - r.left - cx) }; if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), fov: V.fov }; } });
     cv.addEventListener('pointermove', e => {
       if (!pts.has(e.pointerId) || mini) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
-      if (pts.size === 2 && pinch && !dome) { const [a, b] = [...pts.values()]; V.fov = clamp(pinch.fov * pinch.d / Math.hypot(a[0] - b[0], a[1] - b[1]), 1, 170); moved = true; dirty = true; return; }
+      if (pts.size === 2 && pinch && !dome && !V.camera) { const [a, b] = [...pts.values()]; V.fov = clamp(pinch.fov * pinch.d / Math.hypot(a[0] - b[0], a[1] - b[1]), 1, 170); moved = true; dirty = true; return; }
       if (pts.size !== 1 || !start) return;
       const dx = e.clientX - start.x, dy = e.clientY - start.y; if (Math.hypot(dx, dy) > 4) moved = true; else return;
       if (dome) { if (V.follow) return; const r = cv.getBoundingClientRect(), a1 = Math.atan2(e.clientY - r.top - cy, e.clientX - r.left - cx); V.heading = start.hd - (a1 - start.a0) * R2D; dirty = true; return; }
@@ -586,8 +594,8 @@ export function createSky(cv, cfg = {}) {
     const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!moved && start && pts.size === 0) { const r = cv.getBoundingClientRect(); tap(e.clientX - r.left, e.clientY - r.top); } if (pts.size === 0) start = null; };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', e => { pts.delete(e.pointerId); pinch = null; start = null; });
     if (!dome) {
-      cv.addEventListener('wheel', e => { e.preventDefault(); V.fov = clamp(V.fov * Math.exp(e.deltaY * .0012), 1, 170); dirty = true; }, { passive: false });
-      cv.addEventListener('dblclick', () => { V.fov = clamp(V.fov / 2, 1, 170); dirty = true; });
+      cv.addEventListener('wheel', e => { e.preventDefault(); if (V.camera) return; V.fov = clamp(V.fov * Math.exp(e.deltaY * .0012), 1, 170); eyeOn = false; dirty = true; }, { passive: false });
+      cv.addEventListener('dblclick', () => { if (V.camera) return; V.fov = clamp(V.fov / 2, 1, 170); eyeOn = false; dirty = true; });
     }
   }
 
@@ -618,12 +626,22 @@ export function createSky(cv, cfg = {}) {
       dirty = true; return V.follow;
     },
     stream: null,
+    get camLong() { return camLong; },
+    setCamLong(deg) { camLong = clamp(+deg || DEFAULT_CAM_LONG_DEG, 40, 110); store.set('camFovLong', camLong); fitCamera(); return camLong; },
+    // "Match my eyes": make the screen cover the same patch of sky it would if it were a window held at half an arm's length
+    eyeView() {
+      if (V.camera) { toast('Eye view is for when the camera is off'); return false; }
+      if (!eyeOn) { fovBeforeEye = V.fov; V.fov = clamp(eyeViewFov(Math.min(W, H)), 3, 60); eyeOn = true; const a = visibleAngles(V.fov, W, H); toast(`Eye view: the screen covers about ${Math.round(a.across)} degrees across and ${Math.round(a.along)} tall, like a window at half an arm's length (a fist is about 10)`, 6000); }
+      else { V.fov = fovBeforeEye || 60; eyeOn = false; }
+      dirty = true; return eyeOn;
+    },
+    get eyeOn() { return eyeOn; },
     async toggleCamera(force) {
       const want = force ?? !V.camera, vid = cfg.video;
       if (want) {
-        try { api.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); vid.srcObject = api.stream; V.camera = true; if (!V.sensor) await api.toggleSensor(true); V.fov = 62; }
+        try { api.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); vid.srcObject = api.stream; V.camera = true; if (!V.sensor) await api.toggleSensor(true); eyeOn = false; fovBeforeCam = V.fov; V.fov = 46; vid.onloadedmetadata = fitCamera; fitCamera(); }
         catch { toast('Camera not available'); return false; }
-      } else { api.stream?.getTracks().forEach(t => t.stop()); api.stream = null; if (vid) vid.srcObject = null; V.camera = false; }
+      } else { api.stream?.getTracks().forEach(t => t.stop()); api.stream = null; if (vid) vid.srcObject = null; V.camera = false; if (fovBeforeCam) { V.fov = fovBeforeCam; fovBeforeCam = null; } }
       dirty = true; return V.camera;
     },
     align() {
@@ -651,8 +669,16 @@ export function initSky() {
   sky = createSky(document.getElementById('skyCanvas'), { aim: document.getElementById('aimHud'), find: document.getElementById('findHud'), ar: document.getElementById('arCanvas'), video: document.getElementById('camVideo'), hud: { dir: document.getElementById('hudDir'), time: document.getElementById('hudTime') } });
   const $ = id => document.getElementById(id);
   $('btnSensor').onclick = async () => { await sky.toggleSensor(); $('btnSensor').classList.toggle('on', sky.V.sensor); };
-  $('btnCamera').onclick = async () => { await sky.toggleCamera(); $('skyWrap').classList.toggle('cam', sky.V.camera); $('btnCamera').classList.toggle('on', sky.V.camera); $('btnSensor').classList.toggle('on', sky.V.sensor); };
+  $('btnCamera').onclick = async () => { await sky.toggleCamera(); $('btnFov').hidden = !sky.V.camera; if (!sky.V.camera) { $('fovPanel').hidden = true; $('btnFov').classList.remove('on'); } $('skyWrap').classList.toggle('cam', sky.V.camera); $('btnCamera').classList.toggle('on', sky.V.camera); $('btnSensor').classList.toggle('on', sky.V.sensor); };
   $('btnAlign').onclick = () => { const r = sky.align(); $('btnAlign').classList.toggle('on', r === 'armed'); };
+  $('btnEye').onclick = () => { const on_ = sky.eyeView(); $('btnEye').classList.toggle('on', on_); };
+  // camera field of view fit: only offered while the camera is on
+  const fp = $('fovPanel'), fs = $('fovSlider'), fv = $('fovVal');
+  const showFov = () => { fs.value = Math.round(sky.camLong); fv.textContent = `${Math.round(sky.camLong)}°`; };
+  $('btnFov').onclick = () => { showFov(); fp.hidden = !fp.hidden; $('btnFov').classList.toggle('on', !fp.hidden); };
+  fs.oninput = () => { sky.setCamLong(+fs.value); fv.textContent = `${fs.value}°`; };
+  $('fovReset').onclick = () => { sky.setCamLong(72); showFov(); };
+  on('camfov', d => { const el = $('fovInfo'); if (el && d.across) el.textContent = `Picture covers about ${Math.round(d.across)}° across and ${Math.round(d.along)}° tall.`; });
   $('aimHud').onclick = () => sky.pickAim();
   $('findHud').querySelector('.fb').onclick = async () => { await sky.toggleSensor(true); $('btnSensor').classList.toggle('on', sky.V.sensor); };
   $('findStop').onclick = () => sky.select(null);

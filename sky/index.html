@@ -123,7 +123,16 @@
           <button id="btnSensor" class="tool" title="Point your phone at the sky"><b>⌖</b><span>Point</span></button>
           <button id="btnCamera" class="tool" title="Camera overlay"><b>◉</b><span>Camera</span></button>
           <button id="btnAlign" class="tool" title="Align compass on a known object"><b>⊕</b><span>Align</span></button>
+          <button id="btnFov" class="tool" title="Fit the camera field of view" hidden><b>↔</b><span>Fit</span></button>
+          <button id="btnEye" class="tool" title="Match my eyes: the screen covers the same sky as it would held at half an arm's length"><b>◔</b><span>Eyes</span></button>
           <button id="btnLayers" class="tool" title="Layers"><b>≡</b><span>Layers</span></button>
+        </div>
+        <div class="layers card" id="fovPanel" hidden>
+          <p style="margin:0"><b>Camera width</b> <span id="fovVal">72°</span></p>
+          <input type="range" id="fovSlider" min="55" max="95" step="1" value="72" aria-label="Camera width in degrees">
+          <p class="small muted" style="margin:0" id="fovInfo"></p>
+          <p class="small muted" style="margin:0">Find a bright planet or star near the edge of the picture. If its marker sits nearer the middle than the real thing, slide left. If it sits further out, slide right.</p>
+          <button class="btn ghost sm" id="fovReset" type="button">Reset</button>
         </div>
         <div class="layers card" id="layersPanel" hidden>
           <label><input type="checkbox" data-layer="constLines" checked> Constellation lines</label>
