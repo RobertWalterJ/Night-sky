@@ -141,6 +141,7 @@ async function rebuild() {
   await Promise.all(core.map(load));
   build(core);
   if (heavy.length) { await Promise.all(heavy.map(load)); build(want); }
+  el.textContent = `${list.length.toLocaleString()} tracked`; // replaced by the live summary on the next frame
 }
 function build(groups) {
   const seen = new Set(); list = [];
