@@ -68,7 +68,8 @@ export async function satcat(norad) {
   try {
     const { snapshotJSON } = await import('./livedata.js'); scP ||= snapshotJSON('satcat-min.json', 48 * 3600e3);
     const m = await scP, r = m?.rows?.[norad];
-    if (r) { const o = Object.fromEntries(m.cols.map((c, i) => [c, r[i]])); o.NORAD_CAT_ID = norad; for (const k of ['PERIOD', 'INCLINATION', 'APOGEE', 'PERIGEE', 'RCS']) o[k] = o[k] === '' || o[k] == null || isNaN(+o[k]) ? null : +o[k]; // the snapshot stores text; the profile needs numbers const rcs = parseFloat(o.RCS); o.RCS_SIZE = isFinite(rcs) ? (rcs < 0.1 ? 'SMALL' : rcs < 1 ? 'MEDIUM' : 'LARGE') : ''; return o; }
+    // the snapshot stores numbers as text; the profile needs real numbers, so convert them here
+    if (r) { const o = Object.fromEntries(m.cols.map((c, i) => [c, r[i]])); o.NORAD_CAT_ID = norad; for (const k of ['PERIOD', 'INCLINATION', 'APOGEE', 'PERIGEE', 'RCS']) o[k] = o[k] === '' || o[k] == null || isNaN(+o[k]) ? null : +o[k]; const rcs = parseFloat(o.RCS); o.RCS_SIZE = isFinite(rcs) ? (rcs < 0.1 ? 'SMALL' : rcs < 1 ? 'MEDIUM' : 'LARGE') : ''; return o; }
   } catch { }
   try { const r = await cachedJSON(`https://celestrak.org/satcat/records.php?CATNR=${norad}&FORMAT=JSON`, 60 * 24 * 7); return Array.isArray(r) ? r[0] : null; } catch { return null; }
 }
