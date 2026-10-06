@@ -114,7 +114,7 @@ export function createSky(cv, cfg = {}) {
   const V = { az: 180, alt: 40, fov: 90, sensor: false, camera: false, aligning: false, heading: 0, follow: false };
   let B = { f: [0, 1, 0], r: [1, 0, 0], u: [0, 0, 1] };
   let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, F = 1, R = 0, rect = true, active = false, dirty = true;
-  let hits = [], selected = null, track = null, sm = null, lastTick = 0, arMod = null, arLoading = false;
+  let hits = [], selected = null, track = null, sm = null, lastTick = 0, lastLock = 0, lockSaid = false, lockCv = null, lockLog = [], arMod = null, arLoading = false;
   const off = { sky: document.createElement('canvas'), gnd: document.createElement('canvas') };
   // camera: the overlay must use the camera's REAL field of view or markers drift towards the middle (see camfov.js)
   let camLong = +store.get('camFovLong', DEFAULT_CAM_LONG_DEG) || DEFAULT_CAM_LONG_DEG, fovBeforeCam = null, fovBeforeEye = null, eyeOn = false;
@@ -609,6 +609,7 @@ export function createSky(cv, cfg = {}) {
     if (!active || !W) return;
     if (ts - lastTick > (mini ? 5000 : 1000)) { lastTick = ts; dirty = true; }
     if (V.sensor || V.follow) dirty = true;
+    if (V.camera && V.sensor && api.sunLock && ts - lastLock > 700) { lastLock = ts; try { api.lockStep(); } catch { /* never let the lock stop the sky drawing */ } }
     if (!dirty) return;
     dirty = false; draw();
   }
@@ -724,6 +725,30 @@ export function createSky(cv, cfg = {}) {
       toast(`Aligned using the ${best.b.name} in the picture: moved the sky ${Math.abs(cor.yaw).toFixed(1)}° to the ${cor.yaw > 0 ? 'left' : 'right'}.${tilt}`, 7000);
       return 'done';
     },
+    // Sun lock: while the camera is on and the Sun is in the picture, keep nudging the heading so the Sun marker sits on the real Sun.
+    // Whatever makes the heading wander (compass error, gyroscope drift) is corrected a little at a time. It never moves more than
+    // 6 degrees in one step and ignores a Sun that is nowhere near where it should be (probably a bright wall or cloud).
+    sunLock: store.get('sunLock', true) !== false,
+    lockLog: [], lockInfo: null,
+    setSunLock(on) { api.sunLock = !!on; store.set('sunLock', api.sunLock); lockSaid = false; return api.sunLock; },
+    lockStep() {
+      const v = cfg.video; if (!v || !v.videoWidth || !measure()) return;
+      const t = now(), sun = solAt(t).find(b => b.kind === 'sun'); if (!sun || sun.v[2] < .03) return;
+      setup();
+      const sc = .2, sw = Math.max(32, Math.round(W * sc)), sh = Math.max(32, Math.round(H * sc));
+      const c = lockCv || (lockCv = document.createElement('canvas')); c.width = sw; c.height = sh; const g = c.getContext('2d', { willReadFrequently: true });
+      const vw = v.videoWidth, vh = v.videoHeight, k = Math.max(sw / vw, sh / vh); g.drawImage(v, (sw - vw * k) / 2, (sh - vh * k) / 2, vw * k, vh * k);
+      const blobs = findBlobs(g.getImageData(0, 0, sw, sh).data, sw, sh, { minPeak: 235, minArea: 10 }); if (!blobs.length) return;
+      const b0 = blobs[0], d = unproject(b0.x * W / sw, b0.y * H / sh, [0, 0, 0]), cor = headingCorrection(sun.v, d);
+      const here = altAzFromEnu(B.f);
+      lockLog.push({ t: Math.round(t / 1000), heading: +here.az.toFixed(1), tilt: +here.alt.toFixed(1), yaw: +cor.yaw.toFixed(1), pitch: +cor.pitch.toFixed(1), area: b0.area, steady: !!(orient.steady && orient.steadyReady), fov: +V.fov.toFixed(1) });
+      if (lockLog.length > 120) lockLog.shift();
+      api.lockLog = lockLog;
+      if (Math.abs(cor.yaw) > 60 || Math.abs(cor.yaw) < .4) return;
+      applyHeadingDelta(clamp(cor.yaw * .35, -6, 6)); dirty = true;
+      api.lockInfo = { at: Date.now(), yaw: cor.yaw };
+      if (!lockSaid) { lockSaid = true; toast(`Sun lock is on: the sky was ${Math.abs(cor.yaw).toFixed(0)}° off the real Sun and is being pulled onto it.`, 6000); }
+    },
     align() {
       if (V.camera && V.sensor) { const r = api.alignFromPicture(); if (r) return; }
       if (!V.sensor) { toast('Turn on Point first, then align on the Moon, a planet or a bright star'); return; }
@@ -777,6 +802,10 @@ export function initSky() {
   $('btnFov').onclick = () => { showFov(); fp.hidden = !fp.hidden; $('btnFov').classList.toggle('on', !fp.hidden); };
   fs.oninput = () => { sky.setCamLong(+fs.value); fv.textContent = `${fs.value}°`; };
   $('fovReset').onclick = () => { sky.setCamLong(72); showFov(); };
+  const showLock = () => { $('lockBtn').textContent = `Sun lock: ${sky.sunLock ? 'On' : 'Off'}`; };
+  showLock();
+  $('lockBtn').onclick = () => { sky.setSunLock(!sky.sunLock); showLock(); };
+  $('lockCopy').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(sky.lockLog)); toast('Copied. Paste it into the chat.'); } catch { toast('Could not copy'); } };
   on('camfov', d => { const el = $('fovInfo'); if (el && d.across) el.textContent = `Picture covers about ${Math.round(d.across)}° across and ${Math.round(d.along)}° tall.`; });
   $('aimHud').onclick = () => sky.pickAim();
   $('findHud').querySelector('.fb').onclick = async () => { await sky.toggleSensor(true); $('btnSensor').classList.toggle('on', sky.V.sensor); };

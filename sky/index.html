@@ -135,6 +135,11 @@
           <p class="small muted" style="margin:0" id="fovInfo"></p>
           <p class="small muted" style="margin:0">Find a bright planet or star near the edge of the picture. If its marker sits nearer the middle than the real thing, slide left. If it sits further out, slide right.</p>
           <button class="btn ghost sm" id="fovReset" type="button">Reset</button>
+          <hr style="border:0;border-top:1px solid var(--line,#444);margin:6px 0">
+          <p style="margin:0"><b>Sun lock</b> <span id="lockVal"></span></p>
+          <p class="small muted" style="margin:0" id="lockInfo">While the Sun is in the camera picture, the app keeps its marker on the real Sun, so the sky stays put as you turn.</p>
+          <button class="btn ghost sm" id="lockBtn" type="button">Sun lock: On</button>
+          <button class="btn ghost sm" id="lockCopy" type="button">Copy lock log</button>
         </div>
         <div class="layers card" id="layersPanel" hidden>
           <label><input type="checkbox" data-layer="constLines" checked> Constellation lines</label>
