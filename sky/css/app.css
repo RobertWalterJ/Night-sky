@@ -479,3 +479,7 @@ html, body { overflow-x: hidden; }
 /* Red-safe: native checkboxes, radios and sliders take the theme colour (they were default blue) */
 input[type=checkbox], input[type=radio], input[type=range], progress { accent-color: var(--accent); }
 [data-theme="stargazer"] { --muted: #c0432a; }  /* contrast 4.5:1 on black, was too dim to read outdoors */
+
+.aim-hud .av { font-size: .95rem; font-weight: 600; line-height: 1.35; margin-top: 2px; }
+.aim-hud .av[hidden] { display: none; }
+.aim-hud .av[data-level="yes"] { color: var(--good); } .aim-hud .av[data-level="no"] { color: var(--muted); } .aim-hud .av[data-level="maybe"], .aim-hud .av[data-level="binoculars"] { color: var(--ok); }

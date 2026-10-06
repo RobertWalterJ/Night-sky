@@ -113,7 +113,7 @@
           <div class="hud-time" id="hudTime"></div>
         </div>
         <div class="sky-search"><input id="skySearch" placeholder="Find Jupiter, Orion, M31, ISS…" autocomplete="off"><div id="searchResults" class="search-results"></div></div>
-        <button class="aim-hud card" id="aimHud" hidden><b class="an"></b><span class="ad"></span></button>
+        <button class="aim-hud card" id="aimHud" hidden><b class="an"></b><span class="ad"></span><span class="av" hidden></span></button>
         <div class="find-hud card" id="findHud" hidden>
           <div class="fa" aria-hidden="true">➤</div>
           <div class="ft"><b class="fn"></b><span class="fd"></span><button class="btn sm fb" hidden>Turn on Point</button></div>
@@ -357,6 +357,7 @@
     <label>NASA API key <small class="muted">(optional; DEMO_KEY is rate limited)</small><input id="nasaKey" placeholder="DEMO_KEY"></label>
     <p class="small muted" id="dataAge"></p>
     <p class="small muted" id="declLine"></p>
+    <p class="small muted" id="alignLine"></p>
     <p class="small muted">Manual alignment offset: <span id="calOffset">0°</span> <button class="btn ghost sm" id="resetCal" type="button">Reset</button></p>
     <p class="small muted">Data: Open-Meteo, CelesTrak, NOAA SWPC, The Space Devs, Spaceflight News API, NASA, Wikipedia, Radio Browser, SomaFM, OurAirports, d3-celestial. Textures: NASA (Moon, Jupiter, Earth), Solar System Scope (Saturn, CC BY 4.0); others procedural.</p>
     <div class="row end"><button class="btn">Done</button></div>

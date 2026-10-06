@@ -4,6 +4,7 @@ import { BODY_FACTS, bodyHorizontal, riseSet, transit, moonInfo, constellationOf
 import { satPosition, predictPasses } from './sats.js';
 import { profile, satcat, modelFor, relativeSize, ownerName, launchYearFromIntl, transmitters } from './satinfo.js';
 import { comets, cometState, perihelionNear } from './comets.js';
+import { visibilityNow } from './visibility.js';
 
 const A = window.Astronomy;
 const kv = rows => rows.filter(r => r && r[1] != null && r[1] !== '').map(([k, v]) => `<span class="k">${esc(k)}</span><span class="v">${esc(v)}</span>`).join('');
@@ -31,7 +32,7 @@ export async function openInfo(o) {
 async function openInfoCore(o) {
   const sheet = $('#sheet'); sheet.hidden = false; sheet.classList.remove('min'); setMinUi();
   const t = now(), mw = $('#modelWrap');
-  let type = '', rows = [], wiki = [], model = null, phase = null, sprite = null, extra = '';
+  let type = '', rows = [], wiki = [], model = null, phase = null, sprite = null, extra = '', vis = null;
   if (o.kind === 'sun' || o.kind === 'moon' || o.kind === 'planet') {
     const h = bodyHorizontal(o.id, t), F = BODY_FACTS[o.id];
     const il = (() => { try { return A.Illumination(o.id, t); } catch { return null; } })();
@@ -41,6 +42,7 @@ async function openInfoCore(o) {
       ['Magnitude', il ? il.mag.toFixed(2) : null], ['Distance', o.kind === 'moon' ? `${Math.round(distKm).toLocaleString()} km` : `${h.dist.toFixed(3)} AU (${(distKm / 1e6).toFixed(0)} M km)`],
       ['Rises', fmtTime(riseSet(o.id, t, +1), true)], ['Transits', fmtTime(transit(o.id, t), true)], ['Sets', fmtTime(riseSet(o.id, t, -1), true)],
       ['Diameter', F?.d], ...(F?.facts || [])];
+    vis = visibilityNow({ kind: o.kind, mag: il ? il.mag : null, alt: h.alt }, t);
     if (o.kind === 'moon') { const mi = moonInfo(t); phase = mi.phaseAngle; rows.splice(3, 0, ['Phase', `${mi.name}, ${Math.round(mi.illum * 100)}% lit`], ['Age', `${mi.age.toFixed(1)} days`]); }
     if (o.kind === 'planet' && il) rows.splice(4, 0, ['Illuminated', `${Math.round(il.phase_fraction * 100)}%`]);
     model = F?.model; wiki = o.kind === 'planet' && o.id === 'Mercury' ? ['Mercury (planet)'] : [o.id];
@@ -53,12 +55,14 @@ async function openInfoCore(o) {
       ['Designation', o.bayer && con ? `${o.bayer.split(' ')[0]} ${con.g}` : o.bayer], ['Catalogue', [o.hd, `HIP ${o.hip}`].filter(Boolean).join(' · ')],
       ['RA / Dec', `${raStr(o.ra)} / ${decStr(o.dec)}`], ['Constellation', constellationOf(o.ra, o.dec)]];
     wiki = o.proper ? [`${o.proper} (star)`, o.proper] : o.bayer && con ? [`${o.bayer.split(' ')[0]} ${con.g}`] : [];
+    vis = visibilityNow({ kind: 'star', mag: o.mag, alt: aa.alt }, t);
   } else if (o.kind === 'dso') {
     const d = cat.dsos.find(x => x.id === o.id), e = eqjToEnuFn(t)(...d.v), aa = altAzFromEnu(e);
     type = d.t; sprite = dsoSprite(d.tc);
     rows = [['Catalogue', `${d.id}${d.desig ? ' · ' + d.desig : ''}`], ['Altitude', `${aa.alt.toFixed(1)}°`], ['Direction', compass(aa.az)], ['Magnitude', d.m], ['Apparent size', d.dim ? `${d.dim} arcmin` : null],
       ['Constellation', constellationOf(d.ra, d.de)], ['RA / Dec', `${raStr(d.ra)} / ${decStr(d.de)}`], ['Best seen with', d.m < 5 ? 'Naked eye or binoculars' : d.m < 8 ? 'Binoculars or small telescope' : 'Telescope']];
     wiki = [`Messier ${d.id.slice(1)}`];
+    vis = visibilityNow({ kind: 'dso', mag: +d.m, alt: aa.alt, extended: true }, t);
   } else if (o.kind === 'sat') {
     const p = satPosition(o, t), pr = profile(o), tx = await transmitters(o.norad).catch(() => []);
     const sc = await Promise.race([satcat(o.norad), new Promise(r => setTimeout(() => r(null), 2500))]);
@@ -81,6 +85,7 @@ async function openInfoCore(o) {
       ['In sunlight', p ? (p.sunlit ? 'Yes' : "No, in Earth's shadow") : null], ['Brightness', p ? `about mag ${p.mag.toFixed(1)}` : null],
       ['Next visible pass', geo ? 'None: it hangs almost still in your sky, too faint to see without a telescope' : next ? `${fmtTime(next.start, true)}, ${compass(next.startAz)} → ${compass(next.endAz)}, max ${Math.round(next.max.alt)}°` : 'None in 48 h'],
       ['NORAD ID', `${o.norad}${sc?.OBJECT_ID ? ' · ' + sc.OBJECT_ID : ''}`], ['Did you know', pr?.fun]];
+    vis = p ? visibilityNow({ kind: 'sat', mag: p.mag, alt: p.alt, lit: p.sunlit }, t) : null;
     if (tx.length) rows.push(['Radio', tx.slice(0, 6).map(x => `${x[2].toFixed(3)} MHz ${x[1]}${x[0] ? ' (' + x[0] + ')' : ''}`).join(' · ')]);
     model = modelFor(o, sc); wiki = pr?.name ? [pr.name] : { 25544: ['International Space Station'], 48274: ['Tiangong space station'], 20580: ['Hubble Space Telescope'] }[o.norad] || [];
     extra = `<a class="btn ghost sm" target="_blank" rel="noopener" href="https://network.satnogs.org/observations/?norad=${o.norad}&future=0&bad=0&unknown=0&failed=0">Recordings (SatNOGS) ↗</a><button class="btn ghost sm" id="onGlobe">See on 3D Earth</button>`;
@@ -95,6 +100,7 @@ async function openInfoCore(o) {
     type = 'Patch of sky'; rows = [['Altitude', `${o.alt.toFixed(1)}°`], ['Direction', `${compass(o.az)} (${o.az.toFixed(0)}°)`], ['RA / Dec', `${raStr(o.ra)} / ${decStr(o.dec)}`], ['Constellation', constellationOf(o.ra, o.dec)]];
     wiki = [`${constellationOf(o.ra, o.dec)} (constellation)`];
   }
+  if (vis) rows.unshift(['Can I see it?', vis.text]);
   $('#objType').textContent = type; $('#objName').textContent = o.name;
   $('#objFacts').innerHTML = kv(rows);
   $('#objActions').innerHTML = `<button class="btn sm" id="showInSky">Show in sky</button>` + (o.kind === 'sat' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="https://www.n2yo.com/satellite/?s=${o.norad}">Live map ↗</a>` : '')

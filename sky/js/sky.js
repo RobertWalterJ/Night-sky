@@ -9,6 +9,7 @@ import { visibleSats, satPosition } from './sats.js';
 import { comets, cometState, loadComets } from './comets.js';
 import { radecVec } from './astro.js';
 import { cameraOverlayFov, visibleAngles, eyeViewFov, DEFAULT_CAM_LONG_DEG } from './camfov.js';
+import { visibilityNow, skyNow, pickAlignTarget } from './visibility.js';
 loadComets();
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -505,9 +506,12 @@ export function createSky(cv, cfg = {}) {
     if (o) {
       el.querySelector('.an').textContent = o.name || o.id;
       el.querySelector('.ad').textContent = [KIND[o.kind] || '', brightWords(o), con && o.kind !== 'const' ? `in ${con}` : '', `${Math.round(aa.alt)}° up, ${compass(aa.az)}`].filter(Boolean).join(' · ');
+      const vz = visibilityNow({ kind: o.kind, mag: o.mag ?? o.m, alt: aa.alt, lit: o.lit, extended: o.kind === 'dso' }, t), av = el.querySelector('.av');
+      av.textContent = vz ? (vz.level === 'yes' ? '✓ ' : vz.level === 'no' ? '✕ ' : '~ ') + vz.text : ''; av.hidden = !vz; av.dataset.level = vz ? vz.level : '';
     } else {
       el.querySelector('.an').textContent = 'Nothing named here';
       el.querySelector('.ad').textContent = [con ? `Sky in ${con}` : '', `${Math.round(aa.alt)}° up, ${compass(aa.az)}`].filter(Boolean).join(' · ');
+      el.querySelector('.av').hidden = true;
     }
   }
   // Point-and-find: plain-words guidance to the selected object while the phone is pointed at the sky.
@@ -648,7 +652,16 @@ export function createSky(cv, cfg = {}) {
     },
     align() {
       if (!V.sensor) { toast('Turn on Point first, then align on the Moon, a planet or a bright star'); return; }
-      if (!V.aligning) { V.aligning = true; dirty = true; toast('Put a bright object you can see in the crosshair, then tap Align again', 5000); return 'armed'; }
+      if (!V.aligning) {
+        V.aligning = true; dirty = true;
+        const t0 = now(), toEnu0 = eqjToEnuFn(t0), list = [];
+        for (const b of solAt(t0)) { if (b.kind === 'sun' || b.v[2] <= 0) continue; list.push({ kind: b.kind, name: b.name, mag: b.mag, illum: b.illum, alt: altAzFromEnu(b.v).alt, az: altAzFromEnu(b.v).az, obj: b }); }
+        for (let i = 0; i < cat.n; i++) if (cat.mag[i] < 1.6) { const e = toEnu0(cat.vec[i * 3], cat.vec[i * 3 + 1], cat.vec[i * 3 + 2]); if (e[2] > 0) { const aa = altAzFromEnu(e); list.push({ kind: 'star', name: cat.names[cat.id[i]]?.[0] || 'a bright star', mag: cat.mag[i], alt: aa.alt, az: aa.az, idx: i }); } }
+        const pick = pickAlignTarget(list, skyNow(t0));
+        if (pick) { selected = pick.obj || starInfo(pick.idx); track = null; toast(`Best to align on now: ${pick.name}, ${Math.round(pick.alt)}° up in the ${compass(pick.az)}. The arrow will guide you. When it is in the crosshair, tap Align again.`, 8000); }
+        else toast('Nothing bright is up to align on right now. Use the Moon, a bright planet or a bright star once it is dark enough, then tap Align again.', 7000);
+        return 'armed';
+      }
       V.aligning = false;
       const t = now(), cands = solAt(t).filter(b => b.v[2] > 0 && b.kind !== 'sun').map(b => ({ name: b.name, v: b.v })), toEnu = eqjToEnuFn(t);
       for (let i = 0; i < cat.n; i++) if (cat.mag[i] < 1.6) cands.push({ name: cat.names[cat.id[i]]?.[0] || 'star', v: toEnu(cat.vec[i * 3], cat.vec[i * 3 + 1], cat.vec[i * 3 + 2]) });
@@ -657,6 +670,7 @@ export function createSky(cv, cfg = {}) {
       if (!best || bd > 35 * D2R) { toast('No bright object near the crosshair'); return; }
       const tgt = altAzFromEnu(best.v), cur = altAzFromEnu(B.f), delta = ((tgt.az - cur.az + 540) % 360) - 180;
       state.calOffset = (((state.calOffset + delta) + 540) % 360) - 180; store.set('calOffset', state.calOffset);
+      state.calInfo = { at: Date.now(), name: best.name, delta: +delta.toFixed(1) }; store.set('calInfo', state.calInfo);
       emit('calibrated', state.calOffset); toast(`Aligned on ${best.name} (${delta > 0 ? '+' : ''}${delta.toFixed(1)}°)`);
       dirty = true;
     },

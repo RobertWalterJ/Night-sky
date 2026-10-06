@@ -132,7 +132,8 @@ function bindSearch() {
 // ---------- settings ----------
 function bindSettings() {
   const dlg = $('#setDialog');
-  $('#settingsBtn').addEventListener('click', () => { const d = state.declination; $('#declLine').textContent = `Compass is corrected to true north automatically: magnetic declination ${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}° (World Magnetic Model 2025).`; });
+  $('#settingsBtn').addEventListener('click', () => { const c = state.calInfo, mins = c ? Math.round((Date.now() - c.at) / 60000) : 0; $('#alignLine').textContent = c ? `Last aligned ${mins < 2 ? 'just now' : mins < 90 ? mins + ' minutes ago' : Math.round(mins / 60) + ' hours ago'} on ${c.name}, adjusted by ${c.delta > 0 ? '+' : ''}${c.delta}°. Align again whenever things look offset.` : 'Not aligned yet. After this automatic correction, Align on the Moon or a bright planet fixes any small leftover error.';
+    const d = state.declination; $('#declLine').textContent = `Compass is corrected to true north automatically: magnetic declination ${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}° (World Magnetic Model 2025).`; });
   $('#settingsBtn').onclick = () => { $('#autoNight').checked = state.autoNight; $('#use24').checked = state.use24; $('#nasaKey').value = state.nasaKey; $('#calOffset').textContent = `${state.calOffset.toFixed(1)}°`; dlg.showModal(); };
   dlg.addEventListener('close', () => {
     state.autoNight = $('#autoNight').checked; store.set('autoNight', state.autoNight);
