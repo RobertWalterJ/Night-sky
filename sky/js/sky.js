@@ -37,7 +37,7 @@ function onOrient(e) {
   }
   const a = alpha * D2R, b = e.beta * D2R, g = e.gamma * D2R;
   const cA = Math.cos(a), sA = Math.sin(a), cB = Math.cos(b), sB = Math.sin(b), cG = Math.cos(g), sG = Math.sin(g);
-  const dl = state.calOffset * D2R, rot = v => [v[0] * Math.cos(dl) + v[1] * Math.sin(dl), -v[0] * Math.sin(dl) + v[1] * Math.cos(dl), v[2]];
+  const dl = (state.calOffset + (state.declination || 0)) * D2R, rot = v => [v[0] * Math.cos(dl) + v[1] * Math.sin(dl), -v[0] * Math.sin(dl) + v[1] * Math.cos(dl), v[2]];
   orient.X = rot([cA * cG - sA * sB * sG, sA * cG + cA * sB * sG, -cB * sG]);
   orient.Y = rot([-sA * cB, cA * cB, sB]);
   orient.Z = rot([cA * sG + sA * sB * cG, sA * sG - cA * sB * cG, cB * cG]);

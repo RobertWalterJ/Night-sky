@@ -463,3 +463,13 @@ html, body { overflow-x: hidden; }
 
 .np { padding: 6px 11px; min-height: 36px; font-size: .9rem; gap: 5px; }
 .sound-now { gap: 6px; }
+
+/* Minimised details sheet: a slim bar docked where the tab bar is, so the globe and the satellite stay in view */
+#sheetMin { position: absolute; right: 62px; top: 14px; z-index: 2; }
+.sheet.min { background: transparent; pointer-events: none; }
+.sheet.min .sheet-card { pointer-events: auto; position: fixed; left: 0; right: 0; bottom: 0; width: 100%; max-width: none; height: calc(64px + env(safe-area-inset-bottom)); max-height: calc(64px + env(safe-area-inset-bottom)); overflow: hidden; border-radius: 0; border-bottom: 0; padding: 8px 120px 0 16px; z-index: 55; }
+.sheet.min .sheet-grab, .sheet.min .model-wrap, .sheet.min #objFacts, .sheet.min #objWiki, .sheet.min #objActions { display: none; }
+.sheet.min .eyebrow { margin: 0; font-size: .72rem; }
+.sheet.min h2 { font-size: 1.1rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet.min #sheetMin, .sheet.min .close { top: 10px; }
+.sheet .iconbtn { width: 44px; height: 44px; }

@@ -8,9 +8,10 @@ import { initEarth, setEarthActive } from './earth.js';
 import { initCalendar, renderCalendar } from './calendar.js';
 import { renderSpaceComms, stopSpaceComms } from './spacecomms.js';
 import { renderTonight } from './tonight.js';
-import { openInfo, closeInfo } from './info.js';
+import { openInfo, closeInfo, toggleInfoMin } from './info.js';
 import { initFeed, renderFeed, stopFeed } from './feed.js';
 import { initRadio, renderRadio } from './radio.js';
+import { declination } from './wmm.js';
 import { initLab, renderLab } from './lab.js';
 import { loadGroup, sats } from './sats.js';
 
@@ -57,6 +58,7 @@ function go(v) {
 // ---------- location ----------
 async function setLocation(lat, lon, name) {
   Object.assign(state, { lat, lon });
+  state.declination = declination(lat, lon, (state.elev || 0) / 1000, new Date()); emit('declination', state.declination); // phone compasses point to MAGNETIC north
   state.name = name || `${lat.toFixed(2)}°, ${lon.toFixed(2)}°`;
   $('#locName').textContent = state.name;
   store.set('loc', { lat, lon, name: state.name });
@@ -130,6 +132,7 @@ function bindSearch() {
 // ---------- settings ----------
 function bindSettings() {
   const dlg = $('#setDialog');
+  $('#settingsBtn').addEventListener('click', () => { const d = state.declination; $('#declLine').textContent = `Compass is corrected to true north automatically: magnetic declination ${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}° (World Magnetic Model 2025).`; });
   $('#settingsBtn').onclick = () => { $('#autoNight').checked = state.autoNight; $('#use24').checked = state.use24; $('#nasaKey').value = state.nasaKey; $('#calOffset').textContent = `${state.calOffset.toFixed(1)}°`; dlg.showModal(); };
   dlg.addEventListener('close', () => {
     state.autoNight = $('#autoNight').checked; store.set('autoNight', state.autoNight);
@@ -154,8 +157,9 @@ async function boot() {
   const THEMES = ['airy', 'cosmos', 'stargazer', 'terminal'], ICON = { airy: '◐', cosmos: '✦', stargazer: '●', terminal: '▮' };
   $('#themeCycle').onclick = () => { const i = THEMES.indexOf(document.documentElement.dataset.theme); state.manualThisSession = true; applyTheme(THEMES[(i + 1) % 4]); };
   on('theme', t => { $('#themeCycle').textContent = ICON[t] || '◐'; }); $('#themeCycle').textContent = ICON[document.documentElement.dataset.theme] || '◐';
+  if (!store.get('declV1', 0)) { const had = state.calOffset; state.calOffset = 0; store.set('calOffset', 0); store.set('declV1', 1); if (Math.abs(had) > .5) setTimeout(() => toast('The compass now corrects to true north automatically, so your old manual alignment was cleared. Use Align if it is still off.', 6000), 2500); }
   bindLocation(); bindTime(); bindSearch(); bindSettings();
-  $('#sheetClose').onclick = closeInfo;
+  $('#sheetClose').onclick = closeInfo; $('#sheetMin').onclick = toggleInfoMin;
   $('#sheet').onclick = e => { if (e.target.id === 'sheet') closeInfo(); };
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeInfo(); });
 

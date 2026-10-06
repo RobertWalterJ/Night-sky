@@ -1,5 +1,5 @@
 // Object info sheet: facts, live position, Wikipedia summary, 3D model viewer
-import { $, esc, now, fmtTime, compass, cachedJSON, state, emit } from './util.js';
+import { $, esc, now, fmtTime, compass, cachedJSON, state, emit, R2D } from './util.js';
 import { BODY_FACTS, bodyHorizontal, riseSet, transit, moonInfo, constellationOf, cat, eqjToEnuFn, altAzFromEnu, dsoSprite } from './astro.js';
 import { satPosition, predictPasses } from './sats.js';
 import { profile, satcat, modelFor, relativeSize, ownerName, launchYearFromIntl, transmitters } from './satinfo.js';
@@ -11,8 +11,25 @@ const raStr = ra => { const h = ra / 15, hh = Math.floor(h), mm = (h - hh) * 60;
 const decStr = d => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(2)}°`;
 let viewerMod = null;
 
+// Orbit worked out from the satellite's own elements, for objects with no catalogue row (or when the catalogue is unreachable)
+function tleOrbit(rec) {
+  if (!rec || !rec.no) return null;
+  const per = 2 * Math.PI / rec.no, a = Math.cbrt(398600.4418 * Math.pow(per * 60 / (2 * Math.PI), 2)), e = rec.ecco || 0;
+  return { PERIOD: per, INCLINATION: rec.inclo * R2D, APOGEE: a * (1 + e) - 6378.137, PERIGEE: a * (1 - e) - 6378.137 };
+}
+
+// One failing detail must never blank the whole sheet: show what is known and say so.
 export async function openInfo(o) {
-  const sheet = $('#sheet'); sheet.hidden = false;
+  try { await openInfoCore(o); }
+  catch (e) {
+    console.warn('info sheet', e); $('#sheet').hidden = false; $('#sheet').classList.remove('min');
+    $('#objType').textContent = 'Details'; $('#objName').textContent = o.name || '';
+    $('#objFacts').innerHTML = kv([['Note', 'Some details could not be loaded just now. Showing what is known.'], ['NORAD ID', o.norad], ['Direction and height', null]]);
+    $('#objActions').innerHTML = `<button class="btn sm" id="showInSky">Show in sky</button>`; $('#showInSky').onclick = () => { closeInfo(); emit('goto', o); };
+  }
+}
+async function openInfoCore(o) {
+  const sheet = $('#sheet'); sheet.hidden = false; sheet.classList.remove('min'); setMinUi();
   const t = now(), mw = $('#modelWrap');
   let type = '', rows = [], wiki = [], model = null, phase = null, sprite = null, extra = '';
   if (o.kind === 'sun' || o.kind === 'moon' || o.kind === 'planet') {
@@ -43,10 +60,11 @@ export async function openInfo(o) {
       ['Constellation', constellationOf(d.ra, d.de)], ['RA / Dec', `${raStr(d.ra)} / ${decStr(d.de)}`], ['Best seen with', d.m < 5 ? 'Naked eye or binoculars' : d.m < 8 ? 'Binoculars or small telescope' : 'Telescope']];
     wiki = [`Messier ${d.id.slice(1)}`];
   } else if (o.kind === 'sat') {
-    const p = satPosition(o, t), pr = profile(o), tx = await transmitters(o.norad);
+    const p = satPosition(o, t), pr = profile(o), tx = await transmitters(o.norad).catch(() => []);
     const sc = await Promise.race([satcat(o.norad), new Promise(r => setTimeout(() => r(null), 2500))]);
     const status = { '+': 'Operational', '-': 'Not operational', P: 'Partially operational', B: 'Backup', S: 'Spare', X: 'Extended mission', D: 'Decayed', '?': 'Unknown' }[sc?.OPS_STATUS_CODE] || '';
     type = pr?.name && pr.name !== o.name ? pr.name : sc?.OBJECT_TYPE === 'R/B' ? 'Rocket body' : sc?.OBJECT_TYPE === 'DEB' ? 'Debris' : o.norad === 25544 ? 'Crewed space station' : 'Satellite';
+    const orb = sc && sc.PERIOD != null ? sc : tleOrbit(o.rec);
     const geo = o.rec && 2 * Math.PI / o.rec.no > 600;
     const next = geo ? null : predictPasses(o, t, 48).find(x => x.visible);
     const SITES = { AFETR: 'Cape Canaveral, Florida', AFWTR: 'Vandenberg, California', TYMSC: 'Baikonur, Kazakhstan', PKMTR: 'Plesetsk, Russia', VOSTO: 'Vostochny, Russia', XICLF: 'Xichang, China', JSC: 'Jiuquan, China', TAISC: 'Taiyuan, China', WSC: 'Wenchang, China', TNSTA: 'Tanegashima, Japan', KSCUT: 'Uchinoura, Japan', SRILR: 'Sriharikota, India', FRGUI: 'Kourou, French Guiana', RLLB: 'Mahia, New Zealand (Rocket Lab)', WRAS: 'Wallops Island, Virginia', KODAK: 'Kodiak, Alaska', SEAL: 'Sea Launch platform', SVOBO: 'Svobodny, Russia', YAVNE: 'Palmachim, Israel', SEMLS: 'Semnan, Iran', NSC: 'Naro, South Korea', DLS: 'Dombarovsky, Russia', SNMLP: 'San Marco platform, Kenya' };
@@ -56,7 +74,7 @@ export async function openInfo(o) {
       ['Launch site', SITES[sc?.LAUNCH_SITE] || sc?.LAUNCH_SITE], ['Expected end', pr?.end], ['Mission', pr?.mission],
       ['Size', pr?.dims || (pr?.len ? `≈ ${pr.len} m` : sc?.RCS ? `radar cross-section ${sc.RCS.toFixed(2)} m²` : null)],
       ['Compared with', pr?.len ? relativeSize(pr.len) : sc?.RCS ? relativeSize(Math.sqrt(sc.RCS) * 1.6) : null], ['Mass', pr?.mass],
-      ['Orbit', sc ? `${sc.PERIGEE} to ${sc.APOGEE} km, ${sc.INCLINATION}° inclination, ${sc.PERIOD.toFixed(1)} min per orbit` : null],
+      ['Orbit', orb ? `${Math.round(orb.PERIGEE)} to ${Math.round(orb.APOGEE)} km, ${(+orb.INCLINATION).toFixed(1)}° inclination, ${(+orb.PERIOD).toFixed(1)} min per orbit${sc && sc.PERIOD != null ? '' : ' (from its orbit data)'}` : null],
       ['Right now', p ? `${p.alt.toFixed(1)}° above your horizon in the ${compass(p.az)}, ${Math.round(p.range)} km away` : null],
       ['Over', p ? `${p.lat.toFixed(1)}°, ${p.lon.toFixed(1)}°, ${Math.round(p.height)} km up` : null],
       ['Speed', p?.vel ? `${(p.vel * 3600).toLocaleString(undefined, { maximumFractionDigits: 0 })} km/h` : null],
@@ -101,4 +119,7 @@ export async function openInfo(o) {
     } catch { }
   }
 }
-export function closeInfo() { $('#sheet').hidden = true; viewerMod?.stopViewer(); }
+// minimise the sheet to a slim bar (in place of the tab bar) so the globe and the satellite's journey stay in view
+function setMinUi() { const m = $('#sheet').classList.contains('min'), b = $('#sheetMin'); if (b) { b.textContent = m ? '▴' : '▾'; b.setAttribute('aria-label', m ? 'Expand details' : 'Minimise details'); b.title = m ? 'Expand details' : 'Minimise to watch'; } }
+export function toggleInfoMin() { $('#sheet').classList.toggle('min'); setMinUi(); }
+export function closeInfo() { $('#sheet').hidden = true; $('#sheet').classList.remove('min'); setMinUi(); viewerMod?.stopViewer(); }

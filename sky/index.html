@@ -294,6 +294,7 @@
 <!-- object info sheet -->
 <div class="sheet" id="sheet" hidden>
   <div class="sheet-card">
+    <button class="iconbtn" id="sheetMin" aria-label="Minimise details" title="Minimise to watch">▾</button>
     <button class="iconbtn close" id="sheetClose" aria-label="Close">✕</button>
     <div class="sheet-grab"></div>
     <div class="sheet-body">
@@ -346,7 +347,8 @@
     <label class="check"><input type="checkbox" id="use24"> 24-hour clock</label>
     <label>NASA API key <small class="muted">(optional; DEMO_KEY is rate limited)</small><input id="nasaKey" placeholder="DEMO_KEY"></label>
     <p class="small muted" id="dataAge"></p>
-    <p class="small muted">Compass offset: <span id="calOffset">0°</span> <button class="btn ghost sm" id="resetCal" type="button">Reset</button></p>
+    <p class="small muted" id="declLine"></p>
+    <p class="small muted">Manual alignment offset: <span id="calOffset">0°</span> <button class="btn ghost sm" id="resetCal" type="button">Reset</button></p>
     <p class="small muted">Data: Open-Meteo, CelesTrak, NOAA SWPC, The Space Devs, Spaceflight News API, NASA, Wikipedia, Radio Browser, SomaFM, OurAirports, d3-celestial. Textures: NASA (Moon, Jupiter, Earth), Solar System Scope (Saturn, CC BY 4.0); others procedural.</p>
     <div class="row end"><button class="btn">Done</button></div>
   </form>
