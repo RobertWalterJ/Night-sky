@@ -11,6 +11,7 @@ import { radecVec } from './astro.js';
 import { cameraOverlayFov, visibleAngles, eyeViewFov, DEFAULT_CAM_LONG_DEG } from './camfov.js';
 import { visibilityNow, skyNow, pickAlignTarget } from './visibility.js';
 import { composeFrame, initSnap } from './snap.js';
+import { findBlobs, pickBlob, headingCorrection, wrapDeg } from './autoalign.js';
 loadComets();
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -40,7 +41,7 @@ function onOrient(e) {
   }
   const a = alpha * D2R, b = e.beta * D2R, g = e.gamma * D2R;
   const cA = Math.cos(a), sA = Math.sin(a), cB = Math.cos(b), sB = Math.sin(b), cG = Math.cos(g), sG = Math.sin(g);
-  const dl = (state.calOffset + (state.declination || 0)) * D2R, rot = v => [v[0] * Math.cos(dl) + v[1] * Math.sin(dl), -v[0] * Math.sin(dl) + v[1] * Math.cos(dl), v[2]];
+  const dl = (state.calOffset + (state.declOff ? 0 : (state.declination || 0))) * D2R, rot = v => [v[0] * Math.cos(dl) + v[1] * Math.sin(dl), -v[0] * Math.sin(dl) + v[1] * Math.cos(dl), v[2]];
   orient.X = rot([cA * cG - sA * sB * sG, sA * cG + cA * sB * sG, -cB * sG]);
   orient.Y = rot([-sA * cB, cA * cB, sB]);
   orient.Z = rot([cA * sG + sA * sB * cG, sA * sG - cA * sB * cG, cB * cG]);
@@ -653,7 +654,31 @@ export function createSky(cv, cfg = {}) {
       } else { api.stream?.getTracks().forEach(t => t.stop()); api.stream = null; if (vid) vid.srcObject = null; V.camera = false; if (fovBeforeCam) { V.fov = fovBeforeCam; fovBeforeCam = null; } }
       dirty = true; return V.camera;
     },
+    // With the camera on, the picture itself measures the compass error: the Sun or Moon is the brightest blob in the frame, so compare
+    // where it really is with where the sky model says it should be.
+    alignFromPicture() {
+      const v = cfg.video; if (!V.camera || !v || !v.videoWidth || !measure()) return null;
+      const t = now(), sc = .25, sw = Math.max(32, Math.round(W * sc)), sh = Math.max(32, Math.round(H * sc));
+      const c = document.createElement('canvas'); c.width = sw; c.height = sh; const g = c.getContext('2d', { willReadFrequently: true });
+      const vw = v.videoWidth, vh = v.videoHeight, k = Math.max(sw / vw, sh / vh); g.drawImage(v, (sw - vw * k) / 2, (sh - vh * k) / 2, vw * k, vh * k);
+      const blobs = findBlobs(g.getImageData(0, 0, sw, sh).data, sw, sh);
+      const bodies = solAt(t).filter(b => (b.kind === 'sun' || b.kind === 'moon') && b.v[2] > 0);
+      if (!bodies.length) return null; // neither is up: use the usual Align on a planet or star
+      if (!blobs.length) { toast('No bright Sun or Moon found in the picture. Get it into view, then tap Align.', 6000); return 'none'; }
+      let best = null;
+      for (const b of bodies) { const pr = project(b.v); if (!pr) continue; const pk = pickBlob(blobs, [pr[0] * sw / W, pr[1] * sh / H]); if (pk && (!best || pk.distPx < best.distPx)) best = { ...pk, b }; }
+      if (!best) { toast('The Sun or Moon is not in the part of the sky you are facing. Turn towards it, then tap Align.', 6000); return 'none'; }
+      const d = unproject(best.blob.x * W / sw, best.blob.y * H / sh, [0, 0, 0]), cor = headingCorrection(best.b.v, d);
+      if (Math.abs(cor.yaw) > 45) { toast(`The ${best.b.name} in the picture is ${Math.abs(cor.yaw).toFixed(0)}° from where the app expects it. That is too far to trust, so nothing was changed.`, 7000); return 'none'; }
+      state.calOffset = wrapDeg(state.calOffset + cor.yaw); store.set('calOffset', state.calOffset);
+      state.calInfo = { at: Date.now(), name: `the ${best.b.name} (from the picture)`, delta: +cor.yaw.toFixed(1) }; store.set('calInfo', state.calInfo);
+      emit('calibrated', state.calOffset); dirty = true;
+      const tilt = Math.abs(cor.pitch) > 3 ? ` Your phone's tilt also reads about ${Math.abs(cor.pitch).toFixed(0)}° ${cor.pitch > 0 ? 'low' : 'high'}.` : '';
+      toast(`Aligned using the ${best.b.name} in the picture: moved the sky ${Math.abs(cor.yaw).toFixed(1)}° to the ${cor.yaw > 0 ? 'left' : 'right'}.${tilt}`, 7000);
+      return 'done';
+    },
     align() {
+      if (V.camera && V.sensor) { const r = api.alignFromPicture(); if (r) return; }
       if (!V.sensor) { toast('Turn on Point first, then align on the Moon, a planet or a bright star'); return; }
       if (!V.aligning) {
         V.aligning = true; dirty = true;

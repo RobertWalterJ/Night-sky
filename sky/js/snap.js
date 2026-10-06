@@ -27,11 +27,11 @@ export const blobOf = canvas => new Promise(r => canvas.toBlob(r, 'image/jpeg', 
 // Open the frozen view. getState() supplies the current direction and selected object for the stamp.
 export function initSnap({ capture, info }) {
   const view = $('#snapView'), img = $('#snapImg'), cap = $('#snapCaption'); if (!view) return null;
-  let raw = null, url = null, t = 0;
-  const lines = () => { const i = info(); return [`${state.name} · ${fmtTime(now(), true)}`, `Facing ${compass(i.az)} ${Math.round(i.az)}°, ${Math.round(i.alt)}° up${i.selected ? ' · ' + i.selected : ''} · Night Sky`]; };
+  let raw = null, meta = null, url = null, t = 0;
+  const lines = () => { const i = meta.info; return [`${state.name} · ${fmtTime(meta.date, true)}`, `Facing ${compass(i.az)} ${Math.round(i.az)}°, ${Math.round(i.alt)}° up${i.selected ? ' · ' + i.selected : ''} · Night Sky`]; };
   const render = async () => { const b = await blobOf(stamp(raw, { caption: cap.value.trim(), lines: lines() })); if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(b); img.src = url; return b; };
-  const open = async () => { raw = capture(); if (!raw) { toast('Nothing to capture yet. Turn the camera on first.'); return; } cap.value = ''; view.hidden = false; await render(); };
-  const close = () => { view.hidden = true; if (url) { URL.revokeObjectURL(url); url = null; } img.removeAttribute('src'); raw = null; };
+  const open = async () => { raw = capture(); meta = { info: info(), date: now() }; /* the stamp describes the moment of the photo, even if the phone moves before you save */ if (!raw) { toast('Nothing to capture yet. Turn the camera on first.'); return; } cap.value = ''; view.hidden = false; await render(); };
+  const close = () => { meta = null; view.hidden = true; if (url) { URL.revokeObjectURL(url); url = null; } img.removeAttribute('src'); raw = null; };
   cap.oninput = () => { clearTimeout(t); t = setTimeout(render, 250); };
   $('#snapBack').onclick = close;
   $('#snapSave').onclick = async () => { const b = await render(); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `night-sky-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.jpg`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Saved to your downloads'); };
