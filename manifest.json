@@ -1,0 +1,116 @@
+{
+ "files": {
+  "tle/stations.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:13:50.038Z",
+   "count": 16,
+   "bytes": 2688,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:43.866Z"
+  },
+  "tle/visual.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:13:56.006Z",
+   "count": 155,
+   "bytes": 26040,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.130Z"
+  },
+  "tle/gnss.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:00.239Z",
+   "count": 168,
+   "bytes": 28224,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.131Z"
+  },
+  "tle/geo.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:04.723Z",
+   "count": 569,
+   "bytes": 95592,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.131Z"
+  },
+  "tle/weather.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:08.914Z",
+   "count": 72,
+   "bytes": 12096,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.132Z"
+  },
+  "tle/resource.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:13.109Z",
+   "count": 167,
+   "bytes": 28056,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.133Z"
+  },
+  "tle/science.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:17.463Z",
+   "count": 46,
+   "bytes": 7728,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.133Z"
+  },
+  "tle/amateur.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:21.647Z",
+   "count": 95,
+   "bytes": 15960,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.134Z"
+  },
+  "tle/cubesat.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:25.823Z",
+   "count": 84,
+   "bytes": 14112,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.134Z"
+  },
+  "tle/oneweb.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:31.041Z",
+   "count": 651,
+   "bytes": 109368,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.134Z"
+  },
+  "tle/starlink.txt": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:37.615Z",
+   "count": 10641,
+   "bytes": 1787688,
+   "error": null,
+   "lastTried": "2026-10-23T05:02:06.996Z"
+  },
+  "decaying.json": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:41.960Z",
+   "count": 70,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.152Z"
+  },
+  "satcat-min.json": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T04:47:11.158Z",
+   "count": 1973,
+   "bytes": 218173,
+   "error": null,
+   "lastTried": "2026-10-22T21:43:48.153Z"
+  },
+  "events.json": {
+   "ok": true,
+   "fetchedAt": "2026-10-24T11:14:44.545Z",
+   "count": 43,
+   "error": null
+  }
+ },
+ "generatedAt": "2026-10-24T11:14:44.545Z",
+ "version": 1,
+ "note": "Snapshots for Night Sky. Sources: CelesTrak (GP, SATCAT) and The Space Devs Launch Library 2. See .github/scripts/prefetch.mjs."
+}
