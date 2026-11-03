@@ -1,5 +1,5 @@
 // Offline support: app shell + catalogue + models are cached; live data is network-first with cache fallback
-const VERSION = 'nightsky-v5-40';
+const VERSION = 'nightsky-v5-41';
 const PREFIX = 'nightsky-'; // all apps share one origin: only ever touch our own caches
 const SHELL = [
   './', 'index.html', 'css/app.css',
@@ -12,9 +12,15 @@ const SHELL = [
   'icons/icon-192.png', 'icons/icon-512.png',
   ...['sun', 'moon', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'iss', 'hubble', 'satellite', 'tiangong', 'gps', 'goes', 'iridium', 'oneweb', 'starlink', 'radarsat', 'eosat', 'cubesat', 'rocketbody', 'debris'].map(m => `models/${m}.glb`),
 ];
-// cache:'reload' so a fresh install never pins files from the browser's 10 minute HTTP cache
-self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u => fetch(new Request(u, { cache: 'reload' })).then(r => { if (!r.ok) throw new Error(u); return c.put(u, r); })))).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith(PREFIX) && !k.startsWith(VERSION)).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
+// cache:'reload' so a fresh install never pins files from the browser's 10 minute HTTP cache.
+// cache.addAll() and Promise.all are all or nothing, and the whole shell is about 6 MB, so only the small core
+// (page, scripts, styles, fonts, icons, sky data, about 1.8 MB) must succeed. Models, textures and big data
+// are filled in one at a time afterwards and a failure there never blocks the install.
+const isCore = u => u === './' || /^(index\.html|css\/|js\/|vendor\/|fonts\/|icons\/)/.test(u) || u === 'data/sky.json';
+const CORE = SHELL.filter(isCore), REST = SHELL.filter(u => !isCore(u));
+const grab = (c, u) => fetch(new Request(u, { cache: 'reload' })).then(r => { if (!r.ok) throw new Error(u); return c.put(u, r); });
+self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => Promise.all(CORE.map(u => grab(c, u))).then(() => REST.reduce((p, u) => p.then(() => grab(c, u).catch(() => {})), Promise.resolve()))).then(() => self.skipWaiting())); });
+self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith(PREFIX) && k !== VERSION && k !== VERSION + '-data').map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if (e.request.method !== 'GET') return;

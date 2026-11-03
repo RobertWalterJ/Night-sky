@@ -2,7 +2,7 @@
 // BUILD must equal the cache name in sw.js; `node .github/scripts/bump.mjs <version> "<note>"` keeps them in step
 // (and a check blocks a push if they drift apart).
 export const APP_VERSION = '1.1.1';
-export const BUILD = 'v5-40';
+export const BUILD = 'v5-41';
 // Newest first. Plain language: this is what you read in Settings > What's new.
 export const CHANGELOG = [
   { v: '1.1.1', date: '2026-10-06', notes: ["Sun diagnostic in the menu: a 3 minute test that measures heading and camera scale and gives you results to paste to Claude"] },
